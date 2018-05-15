@@ -24,22 +24,10 @@ public enum MQTTDecodeError: Error {
     case invalidMessageType
     case invalidQosLevel
     case invalidVersion
-    case invalidStatus
-    case invalidMethod
-    case invalidURL
-    case invalidHost
-    case invalidPort
-    case invalidPath
-    case invalidQueryString
-    case invalidFragment
-    case lfExpected
-    case invalidHeaderToken
-    case invalidContentLength
-    case unexpectedContentLength
-    case invalidChunkSize
-    case invalidConstant
-    case invalidInternalState
-    case strictModeAssertion
-    case paused
+    case exceedMaxStringLength
+    case invalidProtocolName
+    case notMatchedProtocolLevel
+    case invalidVariableHeader(Str: String)
+    case invalidClientId
     case unknown
 }

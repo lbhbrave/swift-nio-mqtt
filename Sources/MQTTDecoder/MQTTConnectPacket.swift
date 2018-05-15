@@ -32,29 +32,44 @@ import NIO
 //}
 
 struct MQTTConnectVariableHeader {
-    
 //    typealias T = MQTTConnectVariableHeader
     let name: String
-    let version: Int8
+    let version: UInt8
     let hasUserName: Bool
     let hasPassword: Bool
     let isWillRetain: Bool
-    let willQos: Bool
+    let willQos: UInt8
     let isWillFlag: Bool
     let isCleanSession: Bool
-    let keepAliveTimeSeconds: Int8
+    let keepAliveTimeSeconds: UInt16
 }
 
 struct MQTTConnectPayload {
     let clientIdentifier: String
-    let willTopic: String
-    let willMessage:String
-    let userName: String
-    let password: String
+    let willTopic: String?
+    let willMessage: Data?
+    let userName: String?
+    let password: Data?
 //    init(clientIdentifier: String, willTopic: String, willMessage: String, userName: String, password: String) {
 //        self.init(clientIdentifier: clientIdentifier, willTopic: willTopic, willMessage: [Character](willMessage), userName: userName, password: [Character](password))
 //    }
 }
+
+struct MQTTVersion {
+    let name: String
+    let level: UInt8
+
+    init(protocolName: String, protocolLevel: UInt8) throws {
+        switch (protocolName, protocolLevel) {
+        case ("MQTT", 4), ("MQIsdp", 3):
+            name = protocolName
+            level = protocolLevel
+        default:
+            throw MQTTDecodeError.notMatchedProtocolLevel
+        }
+    }
+}
+
 enum MQTTConnectReturnCode{
     case CONNECTION_ACCEPTED(raw: Int8)
     case CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION(raw: Int8)

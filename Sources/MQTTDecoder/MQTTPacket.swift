@@ -88,14 +88,14 @@ enum MQTTPacket {
             if case let .CONNEC(variableHeader) = variableHeader!, case let .CONNEC(payload) = payloads!{
                 let connectPacket = MQTTConnecPacket(fixedHeader: fixedHeader, variableHeader: variableHeader, payload: payload)
                 self = .CONNEC(packet: connectPacket)
+                return
             }
-            break
         default:
             fatalError("this shouldnt happen")
         }
         fatalError("this shouldnt happen")
-
     }
+    
 }
 
 struct MQTTConnecPacket {

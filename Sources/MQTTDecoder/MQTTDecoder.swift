@@ -7,13 +7,9 @@ import Foundation
 enum ParseResult {
     case insufficientData
     case continueParsing
-    case parseError(Error)
-    case result(MQTTPacket)
+    case result(packet: MQTTPacket)
 }
 
-// TODO payloads的解析该怎么设计？？
-
-// praseStep怎么设计才能代码复用
 
 fileprivate struct MQTTParserState {
     internal var state: WaitingDataState = .firstByte
@@ -51,7 +47,6 @@ fileprivate struct MQTTParserState {
             }
             
             assert(fixedheader != nil)
-        
             self.curRemainlength = fixedheader!.remainingLength
             self.curFixedHeader = fixedheader!
             self.state = .variableHeaderData
@@ -83,9 +78,10 @@ fileprivate struct MQTTParserState {
 
             let (_, payload) = try decoder!.decodePayloads(variableHeader: self.curVariableHeader, buffer: &buffer)
             let packet = MQTTPacket(fixedHeader: self.curFixedHeader!, variableHeader: self.curVariableHeader, payloads: payload)
+            
             reset()
-
-            return .result(packet)
+            
+            return .result(packet: packet)
         }
     }
     
@@ -98,23 +94,31 @@ fileprivate struct MQTTParserState {
     }
 }
 
-
-class MQTTDecoder: ByteToMessageDecoder {
+final class MQTTDecoder: ByteToMessageDecoder {
+    typealias InboundIn = ByteBuffer
+    typealias InboundOut = MQTTPacket
     var cumulationBuffer: ByteBuffer?
+    private var shouldKeepingParse = true
     fileprivate var parser: MQTTParserState = MQTTParserState()
     func decode(ctx: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
-    
-        repeat {
-            _ = try parser.praseStep(&buffer)
-//            switch retult {
-//            case .parseError(let error)
-//
-//            }
-            
-        } while true
-        
-        return .continue
+        continueParse: while self.shouldKeepingParse {
+            do{
+               let parseRes = try parser.praseStep(&buffer)
+                switch parseRes {
+                    case .insufficientData:
+                        return .needMoreData
+                    case let .result(packet):
+                        ctx.fireChannelRead(self.wrapInboundOut(packet))
+                default:
+                    break
+                }
+            }
+            catch {
+                self.shouldKeepingParse = false
+                ctx.close(promise: nil)
+                ctx.fireErrorCaught(error)
+            }
+        }
+        return .needMoreData
     }
-    
-    
 }

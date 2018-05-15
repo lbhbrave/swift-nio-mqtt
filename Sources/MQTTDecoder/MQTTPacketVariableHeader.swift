@@ -7,7 +7,6 @@
 
 import Foundation
 
-// TODO 使用emnm来控制类型。加油！
 enum MQTTPacketVariableHeader {
     case CONNEC(variableHeader: MQTTConnectVariableHeader)
     case PUBLISH(variableHeader: MQTTPublishVariableHeader)
