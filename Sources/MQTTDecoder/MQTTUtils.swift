@@ -57,3 +57,7 @@ class MQTTUtils {
         }
     }
 }
+
+internal func > (lhs: Int, rhs: UInt32) -> Bool {
+    return lhs > Int(rhs)
+}

@@ -35,9 +35,33 @@ enum MQTTControlPacketType: UInt8 {
     }
 }
 
+//struct MQTTVersion {
+//    let name: String
+//    let level: UInt8
+//    
+//    init(protocolName: String, protocolLevel: UInt8) throws {
+//        switch (protocolName, protocolLevel) {
+//        case ("MQTT", 4), ("MQIsdp", 3):
+//            name = protocolName
+//            level = protocolLevel
+//        default:
+//            throw MQTTDecodeError.notMatchedProtocolLevel
+//        }
+//    }
+//}
+
+
 enum MQTTQos: UInt8 {
     case AT_MOST_ONCE = 0
     case AT_LEAST_ONCE
     case EXACTLY_ONCE
     case RETAIN
+//    static func > (lhs: MQTTQos, rhs: MQTTQos) -> Bool {
+//        return lhs.rawValue > rhs.rawValue
+//    }
+}
+extension MQTTQos{
+    static func > (lhs: MQTTQos, rhs: MQTTQos) -> Bool {
+        return lhs.rawValue > rhs.rawValue
+    }
 }

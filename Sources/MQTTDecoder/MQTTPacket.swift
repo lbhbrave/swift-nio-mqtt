@@ -23,33 +23,6 @@ import NIO
  PINGREQ    12    客户端到服务端    心跳请求
  PINGRESP    13    服务端到客户端    心跳响应
  */
-//fileprivate let typeDic: [Int8: MQTTControlPacketType] = [
-//    1: .CONNEC,
-//    2: .CONNACK,
-//    3: .PUBLISH,
-//    4: .PUBACK,
-//    5: .PUBREC,
-//    6: .PUBREL,
-//    7: .PUBCOMP,
-//    8: .SUBSCRIBE,
-//    9: .SUBACK,
-//    10: .UNSUBSCRIBE,
-//    11: .UNSUBACK,
-//    12: .PINGREQ,
-//    13: .PINGRESP,
-//    14: .DISCONNECT
-//]
-
-
-
-protocol MQTTPacketType{
-    associatedtype variableHeaderType
-    associatedtype payloadType
-    var fixedHeaders: MQTTPacketFixedHeader { set get }
-    var variableHeader: variableHeaderType? { set get }
-    var payloads: payloadType? { set get }
-//    init(fixedHeader: MQTTPacketFixedHeader, variableHeader: M?, payloads: T?)
-}
 
 //struct MQTTPacket {
 ////    typealias MQTTConnectPacket = MQTTPacket<MQTTConnectVariableHeader, MQTTConnectPayload>
@@ -104,30 +77,38 @@ struct MQTTConnecPacket {
     let payload: MQTTConnectPayload
 }
 
+struct MQTTPublishPacket {
+    let fixedHeader: MQTTPacketFixedHeader
+    let variableHeader: MQTTPublishVariableHeader
+    let payload: Data
+}
 
 
-
-//struct MQTTConnectPacket:MQTTPacketType {
-//    typealias payloadType = MQTTConnectPayload
-//    typealias variableHeaderType = MQTTConnectVariableHeader
-//    var variableHeader: MQTTConnectVariableHeader?
-//    var payloads: MQTTConnectPayload?
-//    var fixedHeaders: MQTTPacketFixedHeader
-//}
-//
-//struct MQTTPublishPacket:MQTTPacketType {
-//    typealias payloadType = MQTTConnectPayload
-//    typealias  variableHeaderType = MQTTConnectVariableHeader
-//    var variableHeader: MQTTConnectVariableHeader?
-//    var payloads: MQTTConnectPayload?
-//    var fixedHeaders: MQTTPacketFixedHeader
-//}
-//
-//struct MQTTConAckPacket:MQTTPacketType {
-//    typealias payloadType = MQTTConnectPayload
-//    typealias  variableHeaderType = MQTTConnectVariableHeader
-//    var variableHeader: MQTTConnectVariableHeader? = nil
-//    var payloads: MQTTConnectPayload?
-//    var fixedHeaders: MQTTPacketFixedHeader
-//}
+enum MQTTConnectReturnCode{
+    case CONNECTION_ACCEPTED(raw: Int8)
+    case CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION(raw: Int8)
+    case CONNECTION_REFUSED_IDENTIFIER_REJECTED(raw: Int8)
+    case CONNECTION_REFUSED_SERVER_UNAVAILABLE(raw: Int8)
+    case CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD(raw: Int8)
+    case CONNECTION_REFUSED_NOT_AUTHORIZED(raw: Int8)
+    case CONNECTION_OTHERS(v: Int8)
+    init(_ raw: Int8) {
+        switch raw {
+        case 0x00:
+            self = .CONNECTION_ACCEPTED(raw: raw)
+        case 0x01:
+            self = .CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION(raw: raw)
+        case 0x02:
+            self = .CONNECTION_REFUSED_IDENTIFIER_REJECTED(raw: raw)
+        case 0x03:
+            self = .CONNECTION_REFUSED_SERVER_UNAVAILABLE(raw: raw)
+        case 0x04:
+            self = .CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD(raw: raw)
+        case 0x05:
+            self = .CONNECTION_REFUSED_NOT_AUTHORIZED(raw: raw)
+        default:
+            self = .CONNECTION_OTHERS(v: raw)
+        }
+    }
+}
 
