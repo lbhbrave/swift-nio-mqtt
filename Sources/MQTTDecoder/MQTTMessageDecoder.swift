@@ -41,18 +41,39 @@ internal struct DecodeConsts {
     static let CONNEC_RESERVE_MASK: Byte = 0x01
 }
 
-protocol MQTTAbstractMessageDecoder {
-    func decodeVariableHeader(fixedHeader: MQTTPacketFixedHeader?, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader>
-    func decodePayloads(variableHeader: MQTTPacketVariableHeader?, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketPayload>
-    func decodePayloads(remainLength: Int, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketPayload>
+struct MQTTMessageDecoder {
+
+    func decodeVariableHeader(fixedHeader: MQTTPacketFixedHeader, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader> {
+        switch fixedHeader.MqttMessageType {
+        case .CONNEC:
+            return try decodeConnectVariableHeader(fixedHeader: fixedHeader, buffer: &buffer)
+        case .PUBLISH:
+            return try decodePublishVariableHeader(fixedHeader: fixedHeader, buffer: &buffer)
+        case .PINGREQ, .PINGRESP, .DISCONNECT:
+            return (0, nil)
+        default:
+            return (0, nil)
+        }
+    }
+    
+    func decodePayloads(variableHeader: MQTTPacketVariableHeader?, packetType: MQTTControlPacketType, remainLength: Int, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketPayload> {
+        switch packetType {
+        case .CONNEC:
+            return try decodeConnectPayloads(variableHeader: variableHeader, buffer: &buffer)
+        case .PUBLISH:
+            return try decodePublishPayloads(remainLength: remainLength, buffer: &buffer)
+        case .PINGREQ, .PINGRESP, .DISCONNECT:
+            return (0, nil)
+        default:
+            return (0 ,nil)
+        }
+    }
+    
 }
 
-protocol MQTTFixedHeaderDecoder {
-    static func decodeFixedHeader(buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketFixedHeader>
-}
-
-extension MQTTFixedHeaderDecoder {
-    static func decodeFixedHeader(buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketFixedHeader> {
+// decode fixedHeader
+extension MQTTMessageDecoder {
+    func decodeFixedHeader(buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketFixedHeader> {
         typealias UnsignedByte = UInt8
         
         var decoded = 0
@@ -101,32 +122,15 @@ extension MQTTFixedHeaderDecoder {
     }
 }
 
-extension MQTTAbstractMessageDecoder {
-    
-//    func decodeVariableHeader(fixedHeader: MQTTPacketFixedHeader? = nil, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader> {
-//        return (0, nil)
-//
-//    }
-
-    func decodePayloads(variableHeader: MQTTPacketVariableHeader?, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketPayload> {
-        return (0, nil)
-
-    }
-    
-    func decodePayloads(remainLength: Int, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketPayload> {
-        return (0, nil)
-    }
-
-}
-
-extension MQTTAbstractMessageDecoder {
+// utils funcs
+extension MQTTMessageDecoder {
     internal func decodeMsbLsb(bytes: [UInt8]) -> UInt32 {
         let msbSize = bytes[0]
         let lsbSize = bytes[1]
         let result = UInt32(msbSize << 8 | lsbSize)
         return result
     }
-
+    
     func decodeMsbLsb(buffer: inout ByteBuffer, at: Int,  min: UInt16 = 0, max: UInt16 = UInt16.max) -> decodeResult<Int> {
         guard let bytes = buffer.getBytes(at: at, length: 2) else {
             return decodeResult(0, nil)
@@ -135,9 +139,9 @@ extension MQTTAbstractMessageDecoder {
         
         let lsbSize = bytes[1]
         let result = Int(msbSize << 8 | lsbSize)
-//        if result < min || result > max {
-//            return(false, nil)
-//        }
+        //        if result < min || result > max {
+        //            return(false, nil)
+        //        }
         return decodeResult(2, result)
     }
     
@@ -152,20 +156,20 @@ extension MQTTAbstractMessageDecoder {
             }
             return decodeResult(decoded + size!, nil)
         }
-
+        
         guard let string = buffer.getString(at: at + decoded, length: size!) else {
             return decodeResult(0, nil)
         }
         
         return decodeResult(decoded + size!, string)
     }
-
+    
     func decodeByteArray(buffer: inout ByteBuffer, at: Int) -> decodeResult<Data> {
         let (decoded, size) = decodeMsbLsb(buffer: &buffer, at: at)
         guard decoded != 0 else {
             return decodeResult(0, nil)
         }
-
+        
         guard let data = buffer.getBytes(at: at + decoded, length: size!) else {
             // move back readindex
             return decodeResult(0, nil)
@@ -174,12 +178,10 @@ extension MQTTAbstractMessageDecoder {
     }
 }
 
-struct MQTTConnectMessageDecoder: MQTTAbstractMessageDecoder {
-    
-//    private checkIfneedMore(state: )
-    
-    func decodeVariableHeader(fixedHeader: MQTTPacketFixedHeader? = nil, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader> {
-
+// decode variableheader
+extension MQTTMessageDecoder {
+    func decodeConnectVariableHeader(fixedHeader: MQTTPacketFixedHeader? = nil, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader> {
+        
         // decoded variableHeader, we have sured there is enough buffer
         do {
             let startIndex = buffer.readerIndex
@@ -192,7 +194,7 @@ struct MQTTConnectMessageDecoder: MQTTAbstractMessageDecoder {
             decoded += 1
             
             try MQTTUtils.validateProtocolNameAndLevel(version: (name: protocalName!, level: protocolLevel))
-
+            
             let b1 = buffer.getInteger(at: startIndex + decoded ,as: UInt8.self)
             
             assert(b1 != nil, "should have enough buffer")
@@ -225,10 +227,39 @@ struct MQTTConnectMessageDecoder: MQTTAbstractMessageDecoder {
             throw MQTTDecodeError.invalidProtocolName
         }
     }
-    
-    func decodePayloads(variableHeader: MQTTPacketVariableHeader?, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketPayload> {
-        // because we have checked the bytes if enough before we enter this func ,so we dont check needmore
+
+    func decodePublishVariableHeader(fixedHeader: MQTTPacketFixedHeader?, buffer: inout ByteBuffer) throws -> (decoded: Int, result: MQTTPacketVariableHeader?) {
+        guard let fixedHeader = fixedHeader else {
+            fatalError("this shouldnt happen")
+        }
+        let startIndex = buffer.readerIndex
         
+        var decoded = 0
+        
+        let (d1, topicName) = try self.decodeString(buffer: &buffer, at: startIndex)
+        decoded += d1
+        guard let topic = topicName else {
+            throw MQTTDecodeError.invalidVariableHeader(Str: "publish packet need topicName")
+        }
+        
+        var messageId = -1
+        
+        if fixedHeader.qosLevel > .AT_LEAST_ONCE {
+            let (d2, id) = self.decodeMsbLsb(buffer: &buffer, at: decoded)
+            decoded += d2
+            messageId = Int(id!)
+        }
+        let vh = MQTTPublishVariableHeader(topicName: topic, packetId: messageId)
+        
+        return decodeResult(decoded, .PUBLISH(variableHeader: vh))
+    }
+}
+
+// decode payloads
+extension MQTTMessageDecoder {
+    func decodeConnectPayloads(variableHeader: MQTTPacketVariableHeader?, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketPayload> {
+        
+        // because we have checked the bytes if enough before we enter this func ,so we dont check needmore
         if case let .CONNEC(variableHeader) = variableHeader! {
             do {
                 let startIndex = buffer.readerIndex
@@ -255,84 +286,38 @@ struct MQTTConnectMessageDecoder: MQTTAbstractMessageDecoder {
                     decoded += d4
                     decodedWillMessage = willMessage
                 }
-
+                
                 if variableHeader.hasUserName {
                     
                     let (d5, userName) = try decodeString(buffer: &buffer, at: startIndex + decoded)
                     decoded += d5
                     decodedUserName = userName
-
+                    
                     let (d6, password) = decodeByteArray(buffer: &buffer, at: startIndex + decoded)
                     decoded += d6
                     decodedPassword = password
                 }
-
+                
                 let payload = MQTTConnectPayload(clientIdentifier: clientId!, willTopic: decodedWillTopic, willMessage: decodedWillMessage, userName: decodedUserName, password: decodedPassword)
-
+                
                 return decodeResult(decoded, MQTTPacketPayload.CONNEC(payload: payload))
             }
-
+            
         }
         fatalError("this shouldnt happen")
     }
-    func variableHeaderLength(buffer: inout ByteBuffer) -> Int {
-        return 10
-    }
-}
-
-struct MQTTPublishMessageDecoder: MQTTAbstractMessageDecoder {
-
-    func decodeVariableHeader(fixedHeader: MQTTPacketFixedHeader?, buffer: inout ByteBuffer) throws -> (decoded: Int, result: MQTTPacketVariableHeader?) {
-        guard let fixedHeader = fixedHeader else {
-            fatalError("this shouldnt happen")
-        }
-        let startIndex = buffer.readerIndex
-        
-        var decoded = 0
-
-        let (d1, topicName) = try self.decodeString(buffer: &buffer, at: startIndex)
-        decoded += d1
-        guard let topic = topicName else {
-            throw MQTTDecodeError.invalidVariableHeader(Str: "publish packet need topicName")
-        }
-
-        var messageId = -1
-
-        if fixedHeader.qosLevel > .AT_LEAST_ONCE {
-            let (d2, id) = self.decodeMsbLsb(buffer: &buffer, at: decoded)
-            decoded += d2
-            messageId = Int(id!)
-        }
-        let vh = MQTTPublishVariableHeader(topicName: topic, packetId: messageId)
-        
-        return decodeResult(decoded, .PUBLISH(variableHeader: vh))
-    }
     
-    func decodePayloads(remainLength: Int, buffer: inout ByteBuffer) throws -> (decoded: Int, result: MQTTPacketPayload?) {
+    
+    func decodePublishPayloads(remainLength: Int, buffer: inout ByteBuffer) throws -> (decoded: Int, result: MQTTPacketPayload?) {
         guard remainLength >= 0 else {
             fatalError("this shouldnt happen")
         }
-
+        
         guard let res = buffer.getBytes(at: buffer.readerIndex, length: remainLength) else {
             return (0, nil)
         }
         
         return (remainLength, .PUBLISH(payload: Data(res)))
     }
-
 }
-
-class MQTTMessageDecoder: MQTTFixedHeaderDecoder {
-    static func newDecoder(type: MQTTControlPacketType) -> MQTTAbstractMessageDecoder {
-        switch type {
-        case .CONNEC:
-            return MQTTConnectMessageDecoder()
-        case .PUBLISH:
-            return MQTTPublishMessageDecoder()
-        default:
-            fatalError("shouldn't happen")
-        }
-    }
-}
-
 

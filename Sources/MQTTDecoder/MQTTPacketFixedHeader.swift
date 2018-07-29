@@ -12,7 +12,7 @@ struct MQTTPacketFixedHeader {
     let isDup: Bool
     let qosLevel:MQTTQos
     let isRetain: Bool
-    let remainingLength: Int?
+    let remainingLength: Int
     
     func firstByte() -> UInt8 {
         var res: UInt8 = 0

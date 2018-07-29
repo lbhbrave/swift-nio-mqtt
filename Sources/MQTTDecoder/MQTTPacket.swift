@@ -7,7 +7,6 @@
 
 import Foundation
 import NIO
-
 /*
  CONNECT    1    客户端到服务端    客户端请求连接服务端
  CONNACK    2    服务端到客户端    连接报文确认
@@ -24,38 +23,17 @@ import NIO
  PINGRESP    13    服务端到客户端    心跳响应
  */
 
-//struct MQTTPacket {
-////    typealias MQTTConnectPacket = MQTTPacket<MQTTConnectVariableHeader, MQTTConnectPayload>
-//
-//    var fixedHeader: MQTTPacketFixedHeader
-//    var variableHeader: Any?
-//    var payloads: Any?
-//
-//    init(fixedHeader: MQTTPacketFixedHeader, variableHeader: Any?, payloads: Any?) {
-//        self.fixedHeader = fixedHeader
-//        self.variableHeader = variableHeader
-//        self.payloads = payloads
-//    }
-//
-//    init(fixedHeader: MQTTPacketFixedHeader) {
-//        self.init(fixedHeader: fixedHeader, variableHeader: nil, payloads: nil)
-//    }
-//
-//    init(fixedHeader: MQTTPacketFixedHeader, payloads: Any?) {
-//        self.init(fixedHeader: fixedHeader, variableHeader: nil, payloads: payloads)
-//    }
-//
-//    init(fixedHeader: MQTTPacketFixedHeader,variableHeader: Any?) {
-//       self.init(fixedHeader: fixedHeader, variableHeader: variableHeader, payloads: nil)
-//    }
-//
-//}
-
-
 enum MQTTPacket {
     case CONNEC(packet: MQTTConnecPacket)
     case PUBLISH(packet: MQTTPublishPacket)
     case CONNACK(packet: MQTTConnAckPacket)
+    case PINGREQ(packet: MQTTOnlyFixedHeaderPacket)
+    case PINGRESP(packet: MQTTOnlyFixedHeaderPacket)
+    case PUBACK(packet: MQTTPubReplyPacket)
+    case PUBREC(packet: MQTTPubReplyPacket)
+    case PUBREL(packet: MQTTPubReplyPacket)
+    case PUBCOMP(packet: MQTTPubReplyPacket)
+    
     init(fixedHeader: MQTTPacketFixedHeader, variableHeader: MQTTPacketVariableHeader?, payloads: MQTTPacketPayload?) {
         switch fixedHeader.MqttMessageType {
         case .CONNEC:
@@ -75,11 +53,40 @@ enum MQTTPacket {
                 let publishPacket = MQTTPublishPacket(fixedHeader: fixedHeader, variableHeader: variableHeader, payload: payloads)
                 self = .PUBLISH(packet: publishPacket)
                 return
-            }  
+            }
+        case .PUBACK:
+            if case let .PUBACK(variableHeader) = variableHeader! {
+                let pubackPacket = MQTTPubReplyPacket(fixedHeader: fixedHeader, variableHeader: variableHeader)
+                self = .PUBACK(packet: pubackPacket)
+                return
+            }
+            
+//        case .PUBREL:
+//            if case let .PUBREL(variableHeader) = variableHeader! {
+//                let pubackPacket = MQTTPubReplyPacket(fixedHeader: fixedHeader, variableHeader: variableHeader)
+//                self = .PUBREL(packet: pubackPacket)
+//                return
+//            }
+        case .PINGREQ:
+            let pingReqPacket = MQTTOnlyFixedHeaderPacket(fixedHeader: fixedHeader)
+            self = .PINGREQ(packet: pingReqPacket)
+            return
+        case .PINGRESP:
+            let pingRespPacket = MQTTOnlyFixedHeaderPacket(fixedHeader: fixedHeader)
+            self = .PINGRESP(packet: pingRespPacket)
+            return
         default:
             fatalError("this shouldnt happen")
         }
         fatalError("this shouldnt happen")
+    }
+    
+    init (fixedHeader: MQTTPacketFixedHeader) {
+        self.init(fixedHeader: fixedHeader, variableHeader: nil, payloads: nil)
+    }
+    
+    init (fixedHeader: MQTTPacketFixedHeader, variableHeader: MQTTPacketVariableHeader) {
+        self.init(fixedHeader: fixedHeader, variableHeader: variableHeader, payloads: nil)
     }
     
     func fixedHeader() -> MQTTPacketFixedHeader? {
@@ -127,6 +134,32 @@ struct MQTTPublishPacket {
     let fixedHeader: MQTTPacketFixedHeader
     let variableHeader: MQTTPublishVariableHeader
     let payload: Data?
+}
+
+struct MQTTOnlyFixedHeaderPacket {
+    let fixedHeader: MQTTPacketFixedHeader
+}
+
+struct MQTTPubReplyPacket {
+    let fixedHeader: MQTTPacketFixedHeader
+    let variableHeader: MQTTMessageIdVariableHeader
+
+    init(fixedHeader: MQTTPacketFixedHeader, variableHeader: MQTTMessageIdVariableHeader) {
+        self.fixedHeader = fixedHeader
+        self.variableHeader = variableHeader
+    }
+
+    init?(type: MQTTControlPacketType, messageId: Int) {
+        switch type {
+        case .PUBACK, .PUBREC, .PUBREL, .PUBCOMP:
+            self.fixedHeader = MQTTPacketFixedHeader(MqttMessageType: type, isDup: false, qosLevel: .AT_LEAST_ONCE, isRetain: false, remainingLength: 2)
+            self.variableHeader = MQTTMessageIdVariableHeader(messageId: messageId)
+        default:
+            return nil
+        }
+    }
+    
+    
 }
 
 struct MQTTConnAckPacket {

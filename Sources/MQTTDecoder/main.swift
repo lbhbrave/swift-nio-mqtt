@@ -20,19 +20,25 @@ import NIO
 final class MQTTHandler: ChannelInboundHandler {
     public typealias InboundIn = MQTTPacket
     typealias OutboundOut = MQTTPacket
+    var nums = 0
     public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
         let packet = self.unwrapInboundIn(data)
+        nums += 1
+        print(nums)
         switch packet {
         case let .CONNEC(packet):
             let connack = MQTTConnAckPacket(returnCode: .CONNECTION_ACCEPTED(raw: 0x00))
-            print(packet)
+            print("publish")
             ctx.writeAndFlush(self.wrapOutboundOut(.CONNACK(packet: connack)), promise: nil)
         case let .PUBLISH(packet):
-            let payloads  = String(data: packet.payload!, encoding: .utf8)
-            print(payloads)
-            print(packet)
+//            let payloads  = String(data: packet.payload!, encoding: .utf8)
+            print("publish")
         case .CONNACK(let packet):
-            print(packet)
+            print("connack")
+        case .PINGREQ(let packet):
+            print("pingreq")
+        case .PINGRESP(let packet):
+            print("pingres")
         }
         
     }

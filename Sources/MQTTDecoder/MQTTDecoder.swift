@@ -12,13 +12,15 @@ enum ParseResult {
 
 fileprivate class MQTTParserState {
     internal var state: WaitingDataState = .firstByte
-    internal var decoder: MQTTAbstractMessageDecoder? = nil
+    internal var decoder: MQTTMessageDecoder = MQTTMessageDecoder()
     
     
     internal var cumulationBuffer: ByteBuffer? = nil
     internal private(set) var curRemainlength: Int? = nil
     internal private(set) var curFixedHeader: MQTTPacketFixedHeader? = nil
     internal private(set) var curVariableHeader: MQTTPacketVariableHeader? = nil
+    internal private(set) var curPayload: MQTTPacketPayload? = nil
+
     
     enum WaitingDataState {
         case firstByte
@@ -29,58 +31,36 @@ fileprivate class MQTTParserState {
     func praseStep(_ buffer: inout ByteBuffer) throws -> ParseResult {
         switch self.state {
         case .firstByte:
-            let (decoded, fixedheader) = try MQTTMessageDecoder.decodeFixedHeader(buffer: &buffer)
+            let (decoded, fixedheader) = try decoder.decodeFixedHeader(buffer: &buffer)
             
             guard decoded != 0, let fixedHeader = fixedheader else {
                 return .insufficientData
             }
-            
-            self.decoder = MQTTMessageDecoder.newDecoder(type: fixedHeader.MqttMessageType)
-            
-            self.curRemainlength = fixedHeader.remainingLength
+
             self.curFixedHeader = fixedheader
-            self.state = .variableHeaderData
-            
-            return .decoded(num: decoded)
+            self.curRemainlength = fixedHeader.remainingLength
+            return updateState(curState: .firstByte, decoded: decoded)
             
         case .variableHeaderData:
-            let (decoded, variableHeader) = try decoder!.decodeVariableHeader(fixedHeader: curFixedHeader, buffer: &buffer)
-            
-            guard decoded != 0 else {
-                return .insufficientData
-            }
-            
-            self.curVariableHeader = variableHeader!
+            let (decoded, variableHeader) = try decoder.decodeVariableHeader(fixedHeader: curFixedHeader!, buffer: &buffer)
+            self.curVariableHeader = variableHeader
             self.curRemainlength! -= decoded
-            self.state = .payloadData
-            
-            return .decoded(num: decoded)
-            
+            return updateState(curState: .variableHeaderData, decoded: decoded)
         case .payloadData:
             guard self.curRemainlength! >= 0 else {
                 throw MQTTDecodeError.remainLengthLessThanZero
             }
-            var decodeRes: (Int, MQTTPacketPayload?) = (0 , nil)
-
-            switch self.curFixedHeader!.MqttMessageType {
-                case .SUBACK, .PUBLISH, .SUBSCRIBE, .UNSUBSCRIBE:
-                    decodeRes = try decoder!.decodePayloads(remainLength: self.curRemainlength!, buffer: &buffer)
-                default:
-                    decodeRes = try decoder!.decodePayloads(variableHeader: self.curVariableHeader, buffer: &buffer)
-            }
-            
-            let (decoded, payload) = decodeRes
-            let packet = MQTTPacket(fixedHeader: self.curFixedHeader!, variableHeader: self.curVariableHeader, payloads: payload)
-            reset()
-            return .result(decoded: decoded, packet: packet)
+            let (decoded, payload) = try decoder.decodePayloads(variableHeader: curVariableHeader, packetType: curFixedHeader!.MqttMessageType, remainLength: curRemainlength!, buffer: &buffer)
+            self.curPayload = payload
+            return updateState(curState: .payloadData, decoded: decoded)
         }
     }
     
     func reset() {
-        self.curRemainlength = nil
-        self.decoder = nil
         self.state = .firstByte
+        self.curRemainlength = nil
         self.curFixedHeader = nil
+        self.curPayload = nil
         self.curVariableHeader = nil
     }
     
@@ -99,12 +79,43 @@ fileprivate class MQTTParserState {
         case .payloadData:
             switch self.curFixedHeader!.MqttMessageType {
             case .PUBLISH, .CONNEC:
-                return buffer.readableBytes > self.curRemainlength!
+                return buffer.readableBytes < self.curRemainlength!
             default:
                 return false
             }
         default:
             return false
+        }
+    }
+    
+    func updateState(curState: WaitingDataState, decoded: Int) -> ParseResult {
+        switch curState {
+        case .firstByte:
+            switch curFixedHeader!.MqttMessageType {
+            case .PINGRESP, .PINGREQ, .DISCONNECT:
+                let packet = MQTTPacket(fixedHeader: curFixedHeader!)
+                reset()
+                return .result(decoded: decoded, packet: packet)
+            default:
+                self.state = .variableHeaderData
+                return .decoded(num: decoded)
+            }
+
+        case .variableHeaderData:
+            switch curFixedHeader!.MqttMessageType {
+            case .CONNACK:
+                let packet = MQTTPacket(fixedHeader: curFixedHeader!, variableHeader: curVariableHeader!)
+                reset()
+                return .result(decoded: decoded, packet: packet)
+            default:
+                self.state = .payloadData
+                return .decoded(num: decoded)
+            }
+
+        case .payloadData:
+            let packet = MQTTPacket(fixedHeader: curFixedHeader!, variableHeader: curVariableHeader, payloads: curPayload)
+            reset()
+            return .result(decoded: decoded, packet: packet)
         }
     }
     
@@ -137,7 +148,6 @@ fileprivate class MQTTParserState {
 }
 
 final class MQTTDecoder: ByteToMessageDecoder {
-    
     typealias InboundIn = ByteBuffer
     typealias InboundOut = MQTTPacket
     private var decoding: Bool = false
@@ -158,7 +168,7 @@ final class MQTTDecoder: ByteToMessageDecoder {
         print("channel read")
         var buffer = self.unwrapInboundIn(data)
 
-        newDataComing = true
+//        newDataComing = true
 
         guard !self.decoding else {
 
@@ -198,10 +208,8 @@ final class MQTTDecoder: ByteToMessageDecoder {
         // i have thinked how to write that until i read the code from official http parser
         // its write, so i follow the solution of it
         
-        while newDataComing {
-
-            newDataComing = false
-            
+//        while newDataComing {
+//            newDataComing = false
             // we wont change bufferSlice while parseStep
             parsing: while var bufferSlice = self.parser.cumulationBuffer, bufferSlice.readableBytes > 0 {
                 guard !self.parser.checkIfNeedMore(buffer: bufferSlice) else {
@@ -218,7 +226,7 @@ final class MQTTDecoder: ByteToMessageDecoder {
                     ctx.fireChannelRead(wrapInboundOut(packet))
                 }
             }
-        }
+//        }
     }
     
     // will remove in the future

@@ -11,6 +11,7 @@ enum MQTTPacketVariableHeader {
     case CONNEC(variableHeader: MQTTConnectVariableHeader)
     case PUBLISH(variableHeader: MQTTPublishVariableHeader)
     case CONNACK(variableHeader: MQTTConnAckVariableHeader)
+    case PUBACK(variableHeader: MQTTMessageIdVariableHeader)
 }
 
 struct MQTTConnectVariableHeader {
@@ -34,4 +35,8 @@ struct MQTTPublishVariableHeader {
 struct MQTTConnAckVariableHeader {
     let isSessionPresent: Bool
     let connectReturnCode: MQTTConnectReturnCode
+}
+
+struct MQTTMessageIdVariableHeader {
+    let messageId: Int
 }
