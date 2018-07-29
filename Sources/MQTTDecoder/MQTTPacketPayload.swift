@@ -8,6 +8,7 @@
 import Foundation
 enum MQTTPacketPayload {
     case CONNEC(payload: MQTTConnectPayload)
+    case PUBLISH(payload: Data)
 }
 
 struct MQTTConnectPayload {

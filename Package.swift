@@ -12,7 +12,7 @@ let package = Package(
             targets: ["MQTTDecoder"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-nio.git", from: "1.5.1"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "1.8.0"),
 //        .package(url: "https://github.com/ReactiveX/RxSwift.git", "4.0.0" ..< "5.0.0")
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),

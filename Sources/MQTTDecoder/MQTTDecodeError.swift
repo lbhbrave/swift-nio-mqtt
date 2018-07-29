@@ -20,6 +20,7 @@ import Foundation
 //}
 public enum MQTTDecodeError: Error {
     case remainLengthExceed
+    case remainLengthLessThanZero
     case invalidPayloadBytes
     case invalidMessageType
     case invalidQosLevel

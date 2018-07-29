@@ -25,17 +25,11 @@ internal struct DecodeConsts {
     static let QOS_MASK: Byte = 0x03
     static let QOS_SHIFT: Byte = 1
     static let RETAIN_MASK: Byte = 0x01
-    
     /* Length */
     static let LENGTH_MASK: Byte = 0x7F
     static let LENGTH_FIN_MASK: Byte = 0x80
-    
     /* Connack */
     static let SESSIONPRESENT_MASK: Byte = 0x01
-    
-//    let SESSIONPRESENT_HEADER = Buffer.from([let.SESSIONPRESENT_MASK])
-//    let CONNACK_HEADER = Buffer.from([let.codes['connack'] << let.CMD_SHIFT])
-    
     /* Connect */
     static let USERNAME_MASK: Byte = 0x80
     static let PASSWORD_MASK: Byte = 0x40
@@ -45,13 +39,12 @@ internal struct DecodeConsts {
     static let WILL_FLAG_MASK: Byte = 0x04
     static let CLEAN_SESSION_MASK: Byte = 0x02
     static let CONNEC_RESERVE_MASK: Byte = 0x01
-
-//    let CONNECT_HEADER = Buffer.from([let.codes['connect'] << let.CMD_SHIFT])
 }
 
 protocol MQTTAbstractMessageDecoder {
     func decodeVariableHeader(fixedHeader: MQTTPacketFixedHeader?, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader>
     func decodePayloads(variableHeader: MQTTPacketVariableHeader?, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketPayload>
+    func decodePayloads(remainLength: Int, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketPayload>
 }
 
 protocol MQTTFixedHeaderDecoder {
@@ -59,7 +52,6 @@ protocol MQTTFixedHeaderDecoder {
 }
 
 extension MQTTFixedHeaderDecoder {
-
     static func decodeFixedHeader(buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketFixedHeader> {
         typealias UnsignedByte = UInt8
         
@@ -77,7 +69,7 @@ extension MQTTFixedHeaderDecoder {
         }
         
         let retain = firstByte & DecodeConsts.RETAIN_MASK == 0
-        let qos = (firstByte >> DecodeConsts.CMD_SHIFT) & DecodeConsts.QOS_MASK
+        let qos = (firstByte >> DecodeConsts.QOS_SHIFT) & DecodeConsts.QOS_MASK
         let dup = firstByte & DecodeConsts.DUP_MASK == 0
         
         var loops = 0;
@@ -120,10 +112,14 @@ extension MQTTAbstractMessageDecoder {
         return (0, nil)
 
     }
+    
+    func decodePayloads(remainLength: Int, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketPayload> {
+        return (0, nil)
+    }
+
 }
 
 extension MQTTAbstractMessageDecoder {
-    
     internal func decodeMsbLsb(bytes: [UInt8]) -> UInt32 {
         let msbSize = bytes[0]
         let lsbSize = bytes[1]
@@ -163,21 +159,6 @@ extension MQTTAbstractMessageDecoder {
         
         return decodeResult(decoded + size!, string)
     }
-    
-//    func decodeString(buffer: inout ByteBuffer, len: UInt16,  minBytes: Int16 = 0, maxBytes: Int = Int.max) throws -> decodeResult<String> {
-//        if len < minBytes || Int(len) > maxBytes {
-//            if Int(len) > maxBytes {
-//                throw MQTTDecodeError.exceedMaxStringLength
-//            }
-//            buffer.moveReaderIndex(to: Int(len))
-//            return decodeResult(false, nil)
-//        }
-//        guard let string = buffer.readString(length: Int(len)) else {
-//
-//            return decodeResult(true, nil)
-//        }
-//        return decodeResult(false, string)
-//    }
 
     func decodeByteArray(buffer: inout ByteBuffer, at: Int) -> decodeResult<Data> {
         let (decoded, size) = decodeMsbLsb(buffer: &buffer, at: at)
@@ -232,13 +213,11 @@ struct MQTTConnectMessageDecoder: MQTTAbstractMessageDecoder {
             }
             
             let willRetain = (b1! & DecodeConsts.WILL_RETAIN_MASK) == DecodeConsts.WILL_RETAIN_MASK;
-            let willQos = (b1! & DecodeConsts.WILL_RETAIN_MASK) >> DecodeConsts.WILL_QOS_SHIFT;
+            let willQos = (b1! & DecodeConsts.WILL_QOS_MASK) >> DecodeConsts.WILL_QOS_SHIFT;
             let willFlag = (b1! & DecodeConsts.WILL_FLAG_MASK) == DecodeConsts.WILL_FLAG_MASK;
             let cleanSession = (b1! & DecodeConsts.CLEAN_SESSION_MASK) == DecodeConsts.CLEAN_SESSION_MASK;
             
-            
-            
-            let vheader = MQTTConnectVariableHeader(name: protocalName!, version: protocolLevel, hasUserName: hasUserName, hasPassword: hasPassword, isWillRetain: willRetain, willQos: willQos, isWillFlag: willFlag, isCleanSession: cleanSession, keepAliveTimeSeconds: UInt16(keepAlive!))
+            let vheader = MQTTConnectVariableHeader(name: protocalName!, version: protocolLevel, hasUserName: hasUserName, hasPassword: hasPassword, isWillRetain: willRetain, willQos: MQTTQos(rawValue: willQos)!, isWillFlag: willFlag, isCleanSession: cleanSession, keepAliveTimeSeconds: UInt16(keepAlive!))
             
             return decodeResult(decoded, MQTTPacketVariableHeader.CONNEC(variableHeader: vheader))
             
@@ -303,10 +282,9 @@ struct MQTTConnectMessageDecoder: MQTTAbstractMessageDecoder {
 
 struct MQTTPublishMessageDecoder: MQTTAbstractMessageDecoder {
 
-    
     func decodeVariableHeader(fixedHeader: MQTTPacketFixedHeader?, buffer: inout ByteBuffer) throws -> (decoded: Int, result: MQTTPacketVariableHeader?) {
         guard let fixedHeader = fixedHeader else {
-            fatalError("this shouldnt happebn")
+            fatalError("this shouldnt happen")
         }
         let startIndex = buffer.readerIndex
         
@@ -329,12 +307,22 @@ struct MQTTPublishMessageDecoder: MQTTAbstractMessageDecoder {
         
         return decodeResult(decoded, .PUBLISH(variableHeader: vh))
     }
+    
+    func decodePayloads(remainLength: Int, buffer: inout ByteBuffer) throws -> (decoded: Int, result: MQTTPacketPayload?) {
+        guard remainLength >= 0 else {
+            fatalError("this shouldnt happen")
+        }
+
+        guard let res = buffer.getBytes(at: buffer.readerIndex, length: remainLength) else {
+            return (0, nil)
+        }
+        
+        return (remainLength, .PUBLISH(payload: Data(res)))
+    }
+
 }
 
 class MQTTMessageDecoder: MQTTFixedHeaderDecoder {
-
-    
-
     static func newDecoder(type: MQTTControlPacketType) -> MQTTAbstractMessageDecoder {
         switch type {
         case .CONNEC:

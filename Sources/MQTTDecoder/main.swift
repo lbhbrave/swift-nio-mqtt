@@ -19,14 +19,22 @@ import NIO
 
 final class MQTTHandler: ChannelInboundHandler {
     public typealias InboundIn = MQTTPacket
-    
+    typealias OutboundOut = MQTTPacket
     public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
         let packet = self.unwrapInboundIn(data)
         switch packet {
         case let .CONNEC(packet):
-            print(packet!)
+            let connack = MQTTConnAckPacket(returnCode: .CONNECTION_ACCEPTED(raw: 0x00))
+            print(packet)
+            ctx.writeAndFlush(self.wrapOutboundOut(.CONNACK(packet: connack)), promise: nil)
+        case let .PUBLISH(packet):
+            let payloads  = String(data: packet.payload!, encoding: .utf8)
+            print(payloads)
+            print(packet)
+        case .CONNACK(let packet):
+            print(packet)
         }
-
+        
     }
     
     public func errorCaught(ctx: ChannelHandlerContext, error: Error) {
@@ -42,8 +50,7 @@ final class MQTTHandler: ChannelInboundHandler {
 }
 
 
-
-let group = MultiThreadedEventLoopGroup(numThreads: System.coreCount)
+let group = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 let bootstrap = ServerBootstrap(group: group)
     // Specify backlog and enable SO_REUSEADDR for the server itself
     .serverChannelOption(ChannelOptions.backlog, value: 256)
@@ -52,9 +59,12 @@ let bootstrap = ServerBootstrap(group: group)
     // Set the handlers that are applied to the accepted Channels
     .childChannelInitializer { channel in
         // Add handler that will buffer data until a \n is received
-        channel.pipeline.add(handler: MQTTDecoder()).then{ c in
-            channel.pipeline.add(handler: MQTTHandler())
+        channel.pipeline.add(handler: MQTTEncoder()).then{
+            channel.pipeline.add(handler: MQTTDecoder()).then{
+                channel.pipeline.add(handler: MQTTHandler())
+            }
         }
+ 
     }
     // Enable TCP_NODELAY and SO_REUSEADDR for the accepted Channels
     .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)

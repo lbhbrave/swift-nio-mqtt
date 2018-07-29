@@ -10,6 +10,7 @@ import Foundation
 enum MQTTPacketVariableHeader {
     case CONNEC(variableHeader: MQTTConnectVariableHeader)
     case PUBLISH(variableHeader: MQTTPublishVariableHeader)
+    case CONNACK(variableHeader: MQTTConnAckVariableHeader)
 }
 
 struct MQTTConnectVariableHeader {
@@ -19,7 +20,7 @@ struct MQTTConnectVariableHeader {
     let hasUserName: Bool
     let hasPassword: Bool
     let isWillRetain: Bool
-    let willQos: UInt8
+    let willQos: MQTTQos
     let isWillFlag: Bool
     let isCleanSession: Bool
     let keepAliveTimeSeconds: UInt16
@@ -28,4 +29,9 @@ struct MQTTConnectVariableHeader {
 struct MQTTPublishVariableHeader {
     let topicName: String?
     let packetId: Int?
+}
+
+struct MQTTConnAckVariableHeader {
+    let isSessionPresent: Bool
+    let connectReturnCode: MQTTConnectReturnCode
 }

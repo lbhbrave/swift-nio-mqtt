@@ -53,8 +53,9 @@ import NIO
 
 
 enum MQTTPacket {
-    case CONNEC(packet: MQTTConnecPacket?)
-
+    case CONNEC(packet: MQTTConnecPacket)
+    case PUBLISH(packet: MQTTPublishPacket)
+    case CONNACK(packet: MQTTConnAckPacket)
     init(fixedHeader: MQTTPacketFixedHeader, variableHeader: MQTTPacketVariableHeader?, payloads: MQTTPacketPayload?) {
         switch fixedHeader.MqttMessageType {
         case .CONNEC:
@@ -63,10 +64,55 @@ enum MQTTPacket {
                 self = .CONNEC(packet: connectPacket)
                 return
             }
+        case .CONNACK:
+            if case let .CONNACK(variableHeader) = variableHeader! {
+                let connackPacket = MQTTConnAckPacket(fixedHeader: fixedHeader, variableHeader: variableHeader)
+                self = .CONNACK(packet: connackPacket);
+                return
+            }
+        case .PUBLISH:
+            if case let .PUBLISH(variableHeader) = variableHeader!, case let .PUBLISH(payloads)? = payloads {
+                let publishPacket = MQTTPublishPacket(fixedHeader: fixedHeader, variableHeader: variableHeader, payload: payloads)
+                self = .PUBLISH(packet: publishPacket)
+                return
+            }  
         default:
             fatalError("this shouldnt happen")
         }
         fatalError("this shouldnt happen")
+    }
+    
+    func fixedHeader() -> MQTTPacketFixedHeader? {
+        
+        if case let .PUBLISH(packet) = self {
+            return packet.fixedHeader
+        }
+        
+        if case let .CONNACK(packet) = self {
+            return packet.fixedHeader
+        }
+        
+        if case let .CONNEC(packet) = self {
+            return packet.fixedHeader
+        }
+        return nil
+    }
+    
+    func variableHeader() -> MQTTPacketVariableHeader? {
+        
+        if case let .PUBLISH(packet) = self {
+            return .PUBLISH(variableHeader: packet.variableHeader)
+        }
+        
+        if case let .CONNACK(packet) = self {
+            return .CONNACK(variableHeader: packet.variableHeader)
+        }
+        
+        if case let .CONNEC(packet) = self {
+            return .CONNEC(variableHeader: packet.variableHeader)
+        }
+        
+        return nil
     }
     
 }
@@ -80,19 +126,35 @@ struct MQTTConnecPacket {
 struct MQTTPublishPacket {
     let fixedHeader: MQTTPacketFixedHeader
     let variableHeader: MQTTPublishVariableHeader
-    let payload: Data
+    let payload: Data?
 }
 
+struct MQTTConnAckPacket {
+    var fixedHeader: MQTTPacketFixedHeader = MQTTPacketFixedHeader(MqttMessageType: .CONNACK, isDup: false, qosLevel: .AT_LEAST_ONCE, isRetain: false, remainingLength: 2)
+    let variableHeader: MQTTConnAckVariableHeader
+//    let payload: Data? = nil
+    init(fixedHeader: MQTTPacketFixedHeader, variableHeader: MQTTConnAckVariableHeader) {
+        self.fixedHeader = fixedHeader
+        self.variableHeader = variableHeader
+    }
+    init(returnCode: MQTTConnectReturnCode) {
+        variableHeader = MQTTConnAckVariableHeader(isSessionPresent: false, connectReturnCode: returnCode)
+    }
+    
+    init(isSessionPresent: Bool, returnCode: MQTTConnectReturnCode) {
+        variableHeader = MQTTConnAckVariableHeader(isSessionPresent: isSessionPresent, connectReturnCode: returnCode)
+    }
+}
 
 enum MQTTConnectReturnCode{
-    case CONNECTION_ACCEPTED(raw: Int8)
-    case CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION(raw: Int8)
-    case CONNECTION_REFUSED_IDENTIFIER_REJECTED(raw: Int8)
-    case CONNECTION_REFUSED_SERVER_UNAVAILABLE(raw: Int8)
-    case CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD(raw: Int8)
-    case CONNECTION_REFUSED_NOT_AUTHORIZED(raw: Int8)
-    case CONNECTION_OTHERS(v: Int8)
-    init(_ raw: Int8) {
+    case CONNECTION_ACCEPTED(raw: UInt8)
+    case CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION(raw: UInt8)
+    case CONNECTION_REFUSED_IDENTIFIER_REJECTED(raw: UInt8)
+    case CONNECTION_REFUSED_SERVER_UNAVAILABLE(raw: UInt8)
+    case CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD(raw: UInt8)
+    case CONNECTION_REFUSED_NOT_AUTHORIZED(raw: UInt8)
+    case CONNECTION_OTHERS(v: UInt8)
+    init(_ raw: UInt8) {
         switch raw {
         case 0x00:
             self = .CONNECTION_ACCEPTED(raw: raw)
@@ -109,6 +171,31 @@ enum MQTTConnectReturnCode{
         default:
             self = .CONNECTION_OTHERS(v: raw)
         }
+    }
+    
+    func rawValue() -> UInt8 {
+        if case let .CONNECTION_ACCEPTED(raw) = self {
+            return raw
+        }
+        if case let .CONNECTION_REFUSED_UNACCEPTABLE_PROTOCOL_VERSION(raw) = self {
+            return raw
+        }
+        if case let .CONNECTION_REFUSED_IDENTIFIER_REJECTED(raw) = self {
+            return raw
+        }
+        if case let .CONNECTION_REFUSED_SERVER_UNAVAILABLE(raw) = self {
+            return raw
+        }
+        if case let .CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD(raw) = self {
+            return raw
+        }
+        if case let .CONNECTION_REFUSED_NOT_AUTHORIZED(raw) = self {
+            return raw
+        }
+        if case let .CONNECTION_OTHERS(raw) = self {
+            return raw
+        }
+        return 0
     }
 }
 

@@ -12,7 +12,7 @@ class MQTTUtils {
     
     static internal func validateFixedHeader(_ header : MQTTPacketFixedHeader) throws {
         switch header.MqttMessageType {
-        case .PUBLISH, .SUBSCRIBE, .UNSUBSCRIBE:
+        case .PUBREL, .SUBSCRIBE, .UNSUBSCRIBE:
             if header.qosLevel != .AT_LEAST_ONCE {
                 throw MQTTDecodeError.invalidQosLevel
             }
@@ -61,3 +61,4 @@ class MQTTUtils {
 internal func > (lhs: Int, rhs: UInt32) -> Bool {
     return lhs > Int(rhs)
 }
+
