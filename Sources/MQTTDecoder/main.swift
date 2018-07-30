@@ -27,7 +27,7 @@ final class MQTTHandler: ChannelInboundHandler {
         print(nums)
         switch packet {
         case let .CONNEC(packet):
-            let connack = MQTTConnAckPacket(returnCode: .CONNECTION_ACCEPTED(raw: 0x00))
+            let connack = MQTTConnAckPacket(returnCode: MQTTConnectReturnCode(0x00))
             print("publish")
             ctx.writeAndFlush(self.wrapOutboundOut(.CONNACK(packet: connack)), promise: nil)
         case let .PUBLISH(packet):
@@ -39,6 +39,10 @@ final class MQTTHandler: ChannelInboundHandler {
             print("pingreq")
         case .PINGRESP(let packet):
             print("pingres")
+        case .SUBSCRIBE(let packet):
+            print(packet)
+        default:
+            print("others")
         }
         
     }

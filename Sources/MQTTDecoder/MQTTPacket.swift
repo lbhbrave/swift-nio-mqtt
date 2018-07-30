@@ -33,7 +33,8 @@ enum MQTTPacket {
     case PUBREC(packet: MQTTPubReplyPacket)
     case PUBREL(packet: MQTTPubReplyPacket)
     case PUBCOMP(packet: MQTTPubReplyPacket)
-    
+    case SUBSCRIBE(packet: MQTTSubscribePacket)
+
     init(fixedHeader: MQTTPacketFixedHeader, variableHeader: MQTTPacketVariableHeader?, payloads: MQTTPacketPayload?) {
         switch fixedHeader.MqttMessageType {
         case .CONNEC:
@@ -46,6 +47,12 @@ enum MQTTPacket {
             if case let .CONNACK(variableHeader) = variableHeader! {
                 let connackPacket = MQTTConnAckPacket(fixedHeader: fixedHeader, variableHeader: variableHeader)
                 self = .CONNACK(packet: connackPacket);
+                return
+            }
+        case .SUBSCRIBE:
+            if case let .SUBSCRIBE(variableHeader) = variableHeader!, case let .SUBSCRIBE(payload) = payloads! {
+                let subscribePacket = MQTTSubscribePacket(fixHeader: fixedHeader, variableHeader: variableHeader, payload: payload)
+                self = .SUBSCRIBE(packet: subscribePacket);
                 return
             }
         case .PUBLISH:
@@ -158,8 +165,12 @@ struct MQTTPubReplyPacket {
             return nil
         }
     }
-    
-    
+}
+
+struct MQTTSubscribePacket {
+    let fixHeader: MQTTPacketFixedHeader
+    let variableHeader: MQTTMessageIdVariableHeader
+    let payload: MQTTSubscribePayload
 }
 
 struct MQTTConnAckPacket {

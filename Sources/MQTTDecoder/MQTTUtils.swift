@@ -36,6 +36,11 @@ class MQTTUtils {
         }
     }
     
+    static internal func validateMessageId(id: Int) throws {
+        if id == 0 {
+            throw MQTTDecodeError.invalidClientId
+        }
+    }
     
     static internal func validateClientIdentifier(version: MQTTVersion, clientId: String?) throws {
         let MIN_CLIENT_ID_LENGTH = 1;

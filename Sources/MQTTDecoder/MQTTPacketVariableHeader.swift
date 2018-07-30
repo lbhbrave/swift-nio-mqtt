@@ -12,6 +12,7 @@ enum MQTTPacketVariableHeader {
     case PUBLISH(variableHeader: MQTTPublishVariableHeader)
     case CONNACK(variableHeader: MQTTConnAckVariableHeader)
     case PUBACK(variableHeader: MQTTMessageIdVariableHeader)
+    case SUBSCRIBE(variableHeader: MQTTMessageIdVariableHeader)
 }
 
 struct MQTTConnectVariableHeader {

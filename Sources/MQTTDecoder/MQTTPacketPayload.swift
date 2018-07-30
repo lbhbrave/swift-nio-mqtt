@@ -9,6 +9,7 @@ import Foundation
 enum MQTTPacketPayload {
     case CONNEC(payload: MQTTConnectPayload)
     case PUBLISH(payload: Data)
+    case SUBSCRIBE(payload: MQTTSubscribePayload)
 }
 
 struct MQTTConnectPayload {
@@ -21,3 +22,15 @@ struct MQTTConnectPayload {
     //        self.init(clientIdentifier: clientIdentifier, willTopic: willTopic, willMessage: [Character](willMessage), userName: userName, password: [Character](password))
     //    }
 }
+
+
+struct MQTTSubscribePayload {
+    let subscriptions: [MQTTTopicSubscriptions]
+}
+
+struct MQTTTopicSubscriptions {
+    let topicFilter: String
+    let requestedQoS: MQTTQos
+}
+
+
