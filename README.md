@@ -1,4 +1,4 @@
 # swift-nio-MQTTDecoder
 # MQTTDecoder
 
-A description of this package.
+This is a mqtt codec for swift-nio
