@@ -41,6 +41,8 @@ final class MQTTHandler: ChannelInboundHandler {
             print("pingres")
         case .SUBSCRIBE(let packet):
             print(packet)
+        case .UNSUBSCRIBE(let packet):
+            print(packet)
         default:
             print("others")
         }

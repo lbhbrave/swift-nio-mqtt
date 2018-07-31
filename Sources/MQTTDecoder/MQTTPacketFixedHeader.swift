@@ -69,6 +69,7 @@ enum MQTTQos: UInt8 {
     case AT_MOST_ONCE = 0
     case AT_LEAST_ONCE
     case EXACTLY_ONCE
+    case FAILURE = 0x80
 //    static func > (lhs: MQTTQos, rhs: MQTTQos) -> Bool {
 //        return lhs.rawValue > rhs.rawValue
 //    }

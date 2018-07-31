@@ -10,6 +10,8 @@ enum MQTTPacketPayload {
     case CONNEC(payload: MQTTConnectPayload)
     case PUBLISH(payload: Data)
     case SUBSCRIBE(payload: MQTTSubscribePayload)
+    case SUBACK(payload: MQTTSubAckPayload)
+    case UNSUBSCRIBE(payload: MQTTUnsubscribePayload)
 }
 
 struct MQTTConnectPayload {
@@ -26,6 +28,14 @@ struct MQTTConnectPayload {
 
 struct MQTTSubscribePayload {
     let subscriptions: [MQTTTopicSubscriptions]
+}
+
+struct MQTTSubAckPayload {
+    let grantedQoSLevels: [MQTTQos]
+}
+
+struct MQTTUnsubscribePayload {
+    let topicFilters: [String]
 }
 
 struct MQTTTopicSubscriptions {

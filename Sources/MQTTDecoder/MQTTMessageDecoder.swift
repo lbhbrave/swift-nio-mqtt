@@ -52,7 +52,7 @@ struct MQTTMessageDecoder {
         case .PINGREQ, .PINGRESP, .DISCONNECT:
             return (0, nil)
         case .SUBSCRIBE, .SUBACK, .UNSUBACK, .UNSUBSCRIBE, .PUBACK, .PUBREC, .PUBREL, .PUBCOMP:
-            return try decodeMessageIdVariableHeader(buffer: &buffer)
+            return try decodeMessageIdVariableHeader(fixedHeader: fixedHeader, buffer: &buffer)
         default:
             return (0, nil)
         }
@@ -68,6 +68,10 @@ struct MQTTMessageDecoder {
             return (0, nil)
         case .SUBSCRIBE:
             return try decodeSubscribePayloads(remainLength: remainLength, buffer: &buffer)
+        case .SUBACK:
+            return try decodeSubAckPayloads(remainLength: remainLength, buffer: &buffer)
+        case .UNSUBSCRIBE:
+            return try decodeUnsubscribePayloads(remainLength: remainLength, buffer: &buffer)
         default:
             return (0 ,nil)
         }
@@ -82,8 +86,7 @@ extension MQTTMessageDecoder {
         
         var decoded = 0
         let startIndex = buffer.readerIndex
-        
-        guard let firstByte = buffer.getInteger(at: startIndex, as: UInt8.self) else {
+        guard let firstByte = buffer.getByte(at: startIndex) else {
             return (0, nil)
         }
         
@@ -102,6 +105,9 @@ extension MQTTMessageDecoder {
         var remainingLength = 0;
         var multiplier = 1;
         repeat {
+            if buffer.readerIndex == 3071 {
+                
+            }
             guard let byte = buffer.getInteger(at: startIndex + decoded, as: UInt8.self) else {
                 return (0, nil)
             }
@@ -120,7 +126,7 @@ extension MQTTMessageDecoder {
         
         let fixedHeader = MQTTPacketFixedHeader(MqttMessageType: messageType, isDup: dup, qosLevel: MQTTQos(rawValue: qos)!, isRetain: retain, remainingLength: remainingLength)
         
-        try MQTTUtils.validateFixedHeader(fixedHeader)
+        try MQTTUtils.validateFixedHeader(fixedHeader, firstByte: firstByte)
         
         return (decoded, fixedHeader)
     }
@@ -267,9 +273,31 @@ extension MQTTMessageDecoder {
         return decodeResult(decoded, .PUBLISH(variableHeader: vh))
     }
     
-    func decodeMessageIdVariableHeader(buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader> {
+    func decodeMessageIdVariableHeader(fixedHeader: MQTTPacketFixedHeader, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader> {
         let (decoded, messageId) = try decodeMessageId(buffer: &buffer)
-        return (decoded, .SUBSCRIBE(variableHeader: MQTTMessageIdVariableHeader(messageId: messageId!)))
+        
+        var variableHeader: MQTTPacketVariableHeader
+        switch fixedHeader.MqttMessageType {
+        case .SUBSCRIBE:
+            variableHeader = .SUBSCRIBE(variableHeader: MQTTMessageIdVariableHeader(messageId: messageId!))
+        case .UNSUBSCRIBE:
+            variableHeader = .UNSUBSCRIBE(variableHeader: MQTTMessageIdVariableHeader(messageId: messageId!))
+        case .SUBACK:
+            variableHeader = .SUBACK(variableHeader: MQTTMessageIdVariableHeader(messageId: messageId!))
+        case .UNSUBACK:
+            variableHeader = .UNSUBACK(variableHeader: MQTTMessageIdVariableHeader(messageId: messageId!))
+        case .PUBACK:
+            variableHeader = .PUBACK(variableHeader: MQTTMessageIdVariableHeader(messageId: messageId!))
+        case .PUBREC:
+            variableHeader = .PUBREC(variableHeader: MQTTMessageIdVariableHeader(messageId: messageId!))
+        case .PUBREL:
+            variableHeader = .PUBREL(variableHeader: MQTTMessageIdVariableHeader(messageId: messageId!))
+        case .PUBCOMP:
+            variableHeader = .PUBCOMP(variableHeader: MQTTMessageIdVariableHeader(messageId: messageId!))
+        default:
+            throw MQTTDecodeError.decodeError
+        }
+        return (decoded, variableHeader)
     }
 }
 
@@ -343,7 +371,6 @@ extension MQTTMessageDecoder {
         while totalDecoded < remainLength {
             let (decoded, topic) = try self.decodeString(buffer: &buffer, at: buffer.readerIndex + totalDecoded)
             totalDecoded += decoded
-            
             let qos: UInt8? = buffer.getInteger(at: buffer.readerIndex + totalDecoded)
             totalDecoded += 1
             let requestedQoS = MQTTQos(rawValue: qos! & 0x03)
@@ -352,5 +379,37 @@ extension MQTTMessageDecoder {
         return (totalDecoded, .SUBSCRIBE(payload: MQTTSubscribePayload(subscriptions: subsciptions)))
     }
     
+    func decodeSubAckPayloads(remainLength: Int, buffer: inout ByteBuffer) throws -> (decoded: Int, result: MQTTPacketPayload?) {
+        var totalDecoded = 0
+        var grantedQoSLevels: [MQTTQos] = []
+        while totalDecoded < remainLength {
+            var qos: UInt8 = buffer.getInteger(at: buffer.readerIndex + totalDecoded)!
+            if qos != MQTTQos.FAILURE.rawValue {
+                qos &= 0x03
+            }
+            grantedQoSLevels.append(MQTTQos(rawValue: qos)!)
+            totalDecoded += 1
+        }
+        return (totalDecoded, .SUBACK(payload: MQTTSubAckPayload(grantedQoSLevels: grantedQoSLevels)))
+    }
+    
+    func decodeUnsubscribePayloads(remainLength: Int, buffer: inout ByteBuffer) throws -> (decoded: Int, result: MQTTPacketPayload?) {
+        var totalDecoded = 0
+        var filterTopics: [String] = []
+        while totalDecoded < remainLength {
+            let (decoded, topic) = try self.decodeString(buffer: &buffer, at: buffer.readerIndex + totalDecoded)
+            filterTopics.append(topic!)
+            totalDecoded += decoded
+        }
+        return (totalDecoded, .UNSUBSCRIBE(payload: MQTTUnsubscribePayload(topicFilters: filterTopics)))
+    }
 }
 
+extension ByteBuffer {
+    public func getByte(at: Int) -> UInt8? {
+        guard let bytes = getBytes(at: at, length: 1) else {
+            return nil
+        }
+        return bytes.first
+    }
+}

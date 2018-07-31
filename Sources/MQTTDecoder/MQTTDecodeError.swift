@@ -29,6 +29,8 @@ public enum MQTTDecodeError: Error {
     case invalidProtocolName
     case notMatchedProtocolLevel
     case invalidVariableHeader(Str: String)
+    case invalidFixedHeader(Str: String)
     case invalidClientId
+    case decodeError
     case unknown
 }

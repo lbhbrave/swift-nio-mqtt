@@ -10,11 +10,16 @@ class MQTTUtils {
     typealias MQTTVersion = (name: String, level: UInt8)
     
     
-    static internal func validateFixedHeader(_ header : MQTTPacketFixedHeader) throws {
+    static internal func validateFixedHeader(_ header : MQTTPacketFixedHeader, firstByte: UInt8) throws {
         switch header.MqttMessageType {
         case .PUBREL, .SUBSCRIBE, .UNSUBSCRIBE:
             if header.qosLevel != .AT_LEAST_ONCE {
                 throw MQTTDecodeError.invalidQosLevel
+            }
+            if header.MqttMessageType == .UNSUBSCRIBE {
+                guard firstByte & UInt8(0x0F) == 0x02 else {
+                    throw MQTTDecodeError.invalidFixedHeader(Str: "subscribe first byte invaliad")
+                }
             }
         default:
             return
@@ -37,9 +42,9 @@ class MQTTUtils {
     }
     
     static internal func validateMessageId(id: Int) throws {
-        if id == 0 {
-            throw MQTTDecodeError.invalidClientId
-        }
+//        if id == 0 {
+//            throw MQTTDecodeError.invalidClientId
+//        }
     }
     
     static internal func validateClientIdentifier(version: MQTTVersion, clientId: String?) throws {

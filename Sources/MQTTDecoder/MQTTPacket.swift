@@ -34,7 +34,9 @@ enum MQTTPacket {
     case PUBREL(packet: MQTTPubReplyPacket)
     case PUBCOMP(packet: MQTTPubReplyPacket)
     case SUBSCRIBE(packet: MQTTSubscribePacket)
-
+    case SUBACK(packet: MQTTSubAckPacket)
+    case UNSUBSCRIBE(packet: MQTTUnSubscribekPacket)
+    
     init(fixedHeader: MQTTPacketFixedHeader, variableHeader: MQTTPacketVariableHeader?, payloads: MQTTPacketPayload?) {
         switch fixedHeader.MqttMessageType {
         case .CONNEC:
@@ -55,6 +57,12 @@ enum MQTTPacket {
                 self = .SUBSCRIBE(packet: subscribePacket);
                 return
             }
+        case .UNSUBSCRIBE:
+            if case let .UNSUBSCRIBE(variableHeader) = variableHeader!, case let .UNSUBSCRIBE(payload) = payloads! {
+                let unsubscribePacket = MQTTUnSubscribekPacket(fixHeader: fixedHeader, variableHeader: variableHeader, payload: payload)
+                self = .UNSUBSCRIBE(packet: unsubscribePacket);
+                return
+            }
         case .PUBLISH:
             if case let .PUBLISH(variableHeader) = variableHeader!, case let .PUBLISH(payloads)? = payloads {
                 let publishPacket = MQTTPublishPacket(fixedHeader: fixedHeader, variableHeader: variableHeader, payload: payloads)
@@ -67,13 +75,12 @@ enum MQTTPacket {
                 self = .PUBACK(packet: pubackPacket)
                 return
             }
-            
-//        case .PUBREL:
-//            if case let .PUBREL(variableHeader) = variableHeader! {
-//                let pubackPacket = MQTTPubReplyPacket(fixedHeader: fixedHeader, variableHeader: variableHeader)
-//                self = .PUBREL(packet: pubackPacket)
-//                return
-//            }
+        case .PUBREL:
+            if case let .PUBREL(variableHeader) = variableHeader! {
+                let pubrelPacket = MQTTPubReplyPacket(fixedHeader: fixedHeader, variableHeader: variableHeader)
+                self = .PUBREL(packet: pubrelPacket)
+                return
+            }
         case .PINGREQ:
             let pingReqPacket = MQTTOnlyFixedHeaderPacket(fixedHeader: fixedHeader)
             self = .PINGREQ(packet: pingReqPacket)
@@ -172,6 +179,19 @@ struct MQTTSubscribePacket {
     let variableHeader: MQTTMessageIdVariableHeader
     let payload: MQTTSubscribePayload
 }
+
+struct MQTTSubAckPacket {
+    let fixHeader: MQTTPacketFixedHeader
+    let variableHeader: MQTTMessageIdVariableHeader
+    let payload: MQTTSubAckPayload
+}
+
+struct MQTTUnSubscribekPacket {
+    let fixHeader: MQTTPacketFixedHeader
+    let variableHeader: MQTTMessageIdVariableHeader
+    let payload: MQTTUnsubscribePayload
+}
+
 
 struct MQTTConnAckPacket {
     var fixedHeader: MQTTPacketFixedHeader = MQTTPacketFixedHeader(MqttMessageType: .CONNACK, isDup: false, qosLevel: .AT_LEAST_ONCE, isRetain: false, remainingLength: 2)
