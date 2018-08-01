@@ -105,10 +105,7 @@ extension MQTTMessageDecoder {
         var remainingLength = 0;
         var multiplier = 1;
         repeat {
-            if buffer.readerIndex == 3071 {
-                
-            }
-            guard let byte = buffer.getInteger(at: startIndex + decoded, as: UInt8.self) else {
+            guard let byte = buffer.getByte(at: startIndex + decoded) else {
                 return (0, nil)
             }
             decoded += 1

@@ -24,27 +24,30 @@ final class MQTTHandler: ChannelInboundHandler {
     public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
         let packet = self.unwrapInboundIn(data)
         nums += 1
-        print(nums)
+//        print(nums)
+
         switch packet {
         case let .CONNEC(packet):
             let connack = MQTTConnAckPacket(returnCode: MQTTConnectReturnCode(0x00))
-            print("publish")
+//            print("publish")
             ctx.writeAndFlush(self.wrapOutboundOut(.CONNACK(packet: connack)), promise: nil)
-        case let .PUBLISH(packet):
+//        case let .PUBLISH(packet):
 //            let payloads  = String(data: packet.payload!, encoding: .utf8)
-            print("publish")
-        case .CONNACK(let packet):
-            print("connack")
-        case .PINGREQ(let packet):
-            print("pingreq")
-        case .PINGRESP(let packet):
-            print("pingres")
-        case .SUBSCRIBE(let packet):
-            print(packet)
-        case .UNSUBSCRIBE(let packet):
-            print(packet)
+//            print("publish")
+//        case .CONNACK(let packet):
+//            print("connack")
+//        case .PINGREQ(let packet):
+//            print("pingreq")
+//        case .PINGRESP(let packet):
+//            print("pingres")
+//        case .SUBSCRIBE(let packet):
+//            print(packet)
+//        case .UNSUBSCRIBE(let packet):
+//            print(packet)
         default:
-            print("others")
+            print(nums)
+
+//            print("others")
         }
         
     }

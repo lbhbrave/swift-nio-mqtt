@@ -37,7 +37,7 @@ fileprivate class MQTTParserState {
                 return .insufficientData
             }
 
-            if decoded + buffer.readerIndex > buffer.readableBytes {
+            if decoded > buffer.readableBytes {
                 return .insufficientData
             }
             self.curFixedHeader = fixedheader
@@ -166,7 +166,7 @@ final class MQTTDecoder: ByteToMessageDecoder {
         }
     }
 
-    private var shouldKeepingParse = true
+    private var shouldKeepingParse = false
     fileprivate var parser: MQTTParserState = MQTTParserState()
     public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
         print("channel read")
@@ -184,19 +184,19 @@ final class MQTTDecoder: ByteToMessageDecoder {
         defer {
             self.decoding = false
         }
-        
+
         if self.cumulationBuffer == nil {
             self.cumulationBuffer = buffer
         } else {
             self.cumulationBuffer?.write(buffer: &buffer)
         }
-        
+//
         do {
             try decodeMQTT(ctx: ctx)
             if !shouldKeepingParse {
-                // TODO 适当的时候释放bufferByte
+                //TODO 适当的时候释放bufferByte
                 self.cumulationBuffer = nil
-                shouldKeepingParse = true
+//                shouldKeepingParse = true
             }
         }
         catch {
@@ -210,29 +210,26 @@ final class MQTTDecoder: ByteToMessageDecoder {
     func decodeMQTT(ctx: ChannelHandlerContext) throws {
         // i have thinked how to write that until i read the code from official http parser
         // its write, so i follow the solution of it
-        
-//        while newDataComing {
-//            newDataComing = false
-            // we wont change bufferSlice while parseStep
-        var needMoreData = false
-            parsing: while var bufferSlice = self.parser.cumulationBuffer, bufferSlice.readableBytes > 0 {
-                guard !self.parser.checkIfNeedMore(buffer: bufferSlice) else {
-                    needMoreData = true
-                    break
-                }
-                let res = try self.parser.praseStep(&bufferSlice)
-                switch res {
-                case .insufficientData:
-                    needMoreData = true
-                    break parsing
-                case let .decoded(decoded):
-                    self.cumulationBuffer?.moveReaderIndex(forwardBy: decoded)
-                case let .result(decoded, packet):
-                    self.cumulationBuffer?.moveReaderIndex(forwardBy: decoded)
-                    ctx.fireChannelRead(wrapInboundOut(packet))
+        var needmore = false
+//       we wont change bufferSlice while parseStep
+        parsing: while var bufferSlice = self.parser.cumulationBuffer, bufferSlice.readableBytes > 0 {
+            guard !self.parser.checkIfNeedMore(buffer: bufferSlice) else {
+                needmore = true
+                break
+            }
+            let res = try self.parser.praseStep(&bufferSlice)
+            switch res {
+            case .insufficientData:
+                needmore = true
+                break parsing
+            case let .decoded(decoded):
+                self.cumulationBuffer?.moveReaderIndex(forwardBy: decoded)
+            case let .result(decoded, packet):
+                self.cumulationBuffer?.moveReaderIndex(forwardBy: decoded)
+                ctx.fireChannelRead(wrapInboundOut(packet))
             }
         }
-        shouldKeepingParse = needMoreData || (!needMoreData && self.parser.state == .firstByte && self.parser.cumulationBuffer?.readableBytes == 0)
+        shouldKeepingParse = self.parser.state != .firstByte || (self.parser.state == .firstByte && needmore)
     }
     
     // will remove in the future
