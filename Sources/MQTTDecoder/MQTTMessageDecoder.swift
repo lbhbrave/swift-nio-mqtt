@@ -42,18 +42,17 @@ internal struct DecodeConsts {
 }
 
 struct MQTTMessageDecoder {
-
     func decodeVariableHeader(fixedHeader: MQTTPacketFixedHeader, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader> {
         switch fixedHeader.MqttMessageType {
         case .CONNEC:
             return try decodeConnectVariableHeader(fixedHeader: fixedHeader, buffer: &buffer)
         case .PUBLISH:
             return try decodePublishVariableHeader(fixedHeader: fixedHeader, buffer: &buffer)
-        case .PINGREQ, .PINGRESP, .DISCONNECT:
-            return (0, nil)
+        case .CONNACK:
+            return try decodeConnackVariableHeader(fixedHeader: fixedHeader, buffer: &buffer)
         case .SUBSCRIBE, .SUBACK, .UNSUBACK, .UNSUBSCRIBE, .PUBACK, .PUBREC, .PUBREL, .PUBCOMP:
             return try decodeMessageIdVariableHeader(fixedHeader: fixedHeader, buffer: &buffer)
-        default:
+        case .PINGREQ, .PINGRESP, .DISCONNECT:
             return (0, nil)
         }
     }
@@ -64,19 +63,18 @@ struct MQTTMessageDecoder {
             return try decodeConnectPayloads(variableHeader: variableHeader, buffer: &buffer)
         case .PUBLISH:
             return try decodePublishPayloads(remainLength: remainLength, buffer: &buffer)
-        case .PINGREQ, .PINGRESP, .DISCONNECT:
-            return (0, nil)
         case .SUBSCRIBE:
             return try decodeSubscribePayloads(remainLength: remainLength, buffer: &buffer)
         case .SUBACK:
             return try decodeSubAckPayloads(remainLength: remainLength, buffer: &buffer)
         case .UNSUBSCRIBE:
             return try decodeUnsubscribePayloads(remainLength: remainLength, buffer: &buffer)
+        case .PINGREQ, .PINGRESP, .DISCONNECT:
+            return (0, nil)
         default:
             return (0 ,nil)
         }
     }
-    
 }
 
 // decode fixedHeader
@@ -146,9 +144,6 @@ extension MQTTMessageDecoder {
         
         let lsbSize = bytes[1]
         let result = Int(msbSize << 8 | lsbSize)
-        //        if result < min || result > max {
-        //            return(false, nil)
-        //        }
         return decodeResult(2, result)
     }
     
@@ -268,6 +263,18 @@ extension MQTTMessageDecoder {
         let vh = MQTTPublishVariableHeader(topicName: topic, packetId: messageId)
         
         return decodeResult(decoded, .PUBLISH(variableHeader: vh))
+    }
+    
+    func decodeConnackVariableHeader(fixedHeader: MQTTPacketFixedHeader?, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader> {
+        var decoded = 0
+        let firstByte = buffer.getByte(at: buffer.readerIndex)
+        decoded += 1
+        let isSessionPresent = firstByte! == 0
+        let secondByte = buffer.getByte(at: buffer.readerIndex + decoded)
+        decoded += 1
+        let connectReturnCode = MQTTConnectReturnCode(secondByte!)
+        let vh = MQTTConnAckVariableHeader(isSessionPresent: isSessionPresent, connectReturnCode: connectReturnCode)
+        return decodeResult(decoded, .CONNACK(variableHeader: vh))
     }
     
     func decodeMessageIdVariableHeader(fixedHeader: MQTTPacketFixedHeader, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader> {
@@ -404,6 +411,10 @@ extension MQTTMessageDecoder {
 
 extension ByteBuffer {
     public func getByte(at: Int) -> UInt8? {
+        guard readableBytes > 1 else {
+            return nil
+        }
+        
         guard let bytes = getBytes(at: at, length: 1) else {
             return nil
         }

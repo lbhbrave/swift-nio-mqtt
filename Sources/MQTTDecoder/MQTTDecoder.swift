@@ -14,7 +14,6 @@ fileprivate class MQTTParserState {
     internal var state: WaitingDataState = .firstByte
     internal var decoder: MQTTMessageDecoder = MQTTMessageDecoder()
     
-    
     internal var cumulationBuffer: ByteBuffer? = nil
     internal private(set) var curRemainlength: Int? = nil
     internal private(set) var curFixedHeader: MQTTPacketFixedHeader? = nil
@@ -196,7 +195,6 @@ final class MQTTDecoder: ByteToMessageDecoder {
             if !shouldKeepingParse {
                 //TODO 适当的时候释放bufferByte
                 self.cumulationBuffer = nil
-//                shouldKeepingParse = true
             }
         }
         catch {
@@ -235,24 +233,6 @@ final class MQTTDecoder: ByteToMessageDecoder {
     // will remove in the future
     func decode(ctx: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
         print("decod handle")
-//        continueParse: while self.shouldKeepingParse {
-//            do{
-//               let parseRes = try parser.praseStep(&buffer)
-//                switch parseRes {
-//                    case .insufficientData:
-//                        return .needMoreData
-//                    case let .result(packet):
-//                        ctx.fireChannelRead(self.wrapInboundOut(packet))
-//                default:
-//                    break
-//                }
-//            }
-//            catch {
-//                self.shouldKeepingParse = false
-//                ctx.close(promise: nil)
-//                ctx.fireErrorCaught(error)
-//            }
-//        }
         return .needMoreData
     }
 }

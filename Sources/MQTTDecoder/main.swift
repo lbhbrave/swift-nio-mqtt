@@ -30,6 +30,7 @@ final class MQTTHandler: ChannelInboundHandler {
         case let .CONNEC(packet):
             let connack = MQTTConnAckPacket(returnCode: MQTTConnectReturnCode(0x00))
 //            print("publish")
+//            let connect = MQTTConnecPacket(i)
             ctx.writeAndFlush(self.wrapOutboundOut(.CONNACK(packet: connack)), promise: nil)
 //        case let .PUBLISH(packet):
 //            let payloads  = String(data: packet.payload!, encoding: .utf8)
@@ -44,6 +45,8 @@ final class MQTTHandler: ChannelInboundHandler {
 //            print(packet)
 //        case .UNSUBSCRIBE(let packet):
 //            print(packet)
+        case let .DISCONNECT(packet):
+            print("disconnect")
         default:
             print(nums)
 
