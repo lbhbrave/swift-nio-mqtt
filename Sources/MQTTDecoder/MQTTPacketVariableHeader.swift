@@ -35,7 +35,7 @@ struct MQTTConnectVariableHeader {
 }
 
 struct MQTTPublishVariableHeader {
-    let topicName: String?
+    let topicName: String
     let packetId: Int?
 }
 

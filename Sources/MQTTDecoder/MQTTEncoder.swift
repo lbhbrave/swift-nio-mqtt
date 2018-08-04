@@ -24,20 +24,20 @@ final class MQTTEncoder: ChannelOutboundHandler{
     }
 
     func _write(ctx: ChannelHandlerContext, packet: MQTTPacket) throws {
-        let variableHeaderLength = caculateVariableHeaderLength(p: packet)
-//        let payloadLength = caculatePayloadsLength(p: packet)
         switch packet {
         case let .CONNEC(packet):
             try writeConnectPacket(p: packet, ctx: ctx)
         case let .CONNACK(packet):
             try writeConnAckPacket(p: packet, ctx: ctx)
+        case let .PUBLISH(packet):
+            try writePublishPacket(p: packet, ctx: ctx)
         default:
             return
         }
     }
     func writeConnAckPacket(p: MQTTConnAckPacket, ctx: ChannelHandlerContext) throws {
         var buf = ctx.channel.allocator.buffer(capacity: 4)
-        buf.write(byte: p.fixedHeader.firstByte())
+        buf.write(byte: encodeFixedHeder(p.fixedHeader))
         buf.write(byte: 2)
         buf.write(byte: p.variableHeader.isSessionPresent ? 0x01 : 0x00)
         buf.write(byte: p.variableHeader.connectReturnCode.rawValue())
@@ -94,7 +94,39 @@ final class MQTTEncoder: ChannelOutboundHandler{
             buf.encodeWrite(data: payload.password)
         }
 
-        ctx.write(self.wrapOutboundOut(buf))
+        ctx.writeAndFlush(wrapOutboundOut(buf), promise: nil)
+    }
+    
+    func writePublishPacket(p: MQTTPublishPacket, ctx: ChannelHandlerContext) throws {
+        let fixedHeader = p.fixedHeader
+        let variableHeader = p.variableHeader
+        let payload = p.payload
+        
+        var payloadSize = 0
+        var variableHeaderSize = 0
+        
+        variableHeaderSize += 2
+        variableHeaderSize += variableHeader.topicName.lengthOfBytes(using: .utf8)
+        variableHeaderSize += fixedHeader.qosLevel > .AT_MOST_ONCE ? 2 : 0
+        
+        payloadSize += payload?.count ?? 0
+        
+        let variablePartSize = payloadSize + variableHeaderSize
+        let fixedHeaderSize = 1 + encodeVariablePartSize(size: variablePartSize)
+        
+        var buf = ctx.channel.allocator.buffer(capacity: fixedHeaderSize + variablePartSize)
+        
+        buf.write(byte: encodeFixedHeder(fixedHeader))
+        writeVariableLength(buffer: &buf, length: variablePartSize)
+        buf.encodeWrite(str: variableHeader.topicName)
+        
+        if fixedHeader.qosLevel > .AT_MOST_ONCE {
+            buf.write(short: variableHeader.packetId!)
+        }
+        if let payload = payload {
+            buf.write(bytes: payload)
+        }
+        ctx.writeAndFlush(self.wrapOutboundOut(buf), promise: nil)
     }
     
     func writeVariableLength(buffer: inout ByteBuffer, length: Int) {
@@ -109,20 +141,12 @@ final class MQTTEncoder: ChannelOutboundHandler{
         } while num > 0;
     }
     
-    
-    func caculateVariableHeaderLength(p: MQTTPacket) ->Int {
-        
-        return 0
-    }
-    
     func encodeVariablePartSize(size: Int) -> Int {
         var count = 0
         var size = size
-        
         repeat {
             size /= 128
-            
-            count += 2
+            count += 1
         } while size > 0
         
         return count;

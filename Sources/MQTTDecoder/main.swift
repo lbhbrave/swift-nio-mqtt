@@ -27,22 +27,26 @@ final class MQTTHandler: ChannelInboundHandler {
 //        print(nums)
 
         switch packet {
-        case let .CONNEC(packet):
+        case let .CONNEC(_):
             let connack = MQTTConnAckPacket(returnCode: MQTTConnectReturnCode(0x00))
 //            print("publish")
 //            let connect = MQTTConnecPacket(i)
             ctx.writeAndFlush(self.wrapOutboundOut(.CONNACK(packet: connack)), promise: nil)
-//        case let .PUBLISH(packet):
-//            let payloads  = String(data: packet.payload!, encoding: .utf8)
-//            print("publish")
+        case let .PUBLISH(packet):
+            let topic = packet.topic
+            let payloads  = String(data: packet.payload!, encoding: .utf8)
+            print("get \(topic) payload: \(payloads ?? "nothing")")
+            let publisPacket = MQTTPublishPacket(topic: topic, payload: "hello world", qos: .AT_LEAST_ONCE, messageId: 423)
+            ctx.writeAndFlush(self.wrapOutboundOut(.PUBLISH(packet: publisPacket)), promise: nil)
+
 //        case .CONNACK(let packet):
 //            print("connack")
 //        case .PINGREQ(let packet):
 //            print("pingreq")
 //        case .PINGRESP(let packet):
 //            print("pingres")
-//        case .SUBSCRIBE(let packet):
-//            print(packet)
+        case .SUBSCRIBE(let packet):
+            print(packet)
 //        case .UNSUBSCRIBE(let packet):
 //            print(packet)
         case let .DISCONNECT(packet):

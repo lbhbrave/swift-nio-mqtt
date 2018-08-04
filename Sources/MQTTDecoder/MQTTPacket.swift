@@ -176,6 +176,24 @@ struct MQTTPublishPacket {
     let fixedHeader: MQTTPacketFixedHeader
     let variableHeader: MQTTPublishVariableHeader
     let payload: Data?
+    
+    var topic: String {
+        return variableHeader.topicName
+    }
+    
+    init(fixedHeader: MQTTPacketFixedHeader, variableHeader: MQTTPublishVariableHeader, payload: Data?) {
+        self.fixedHeader = fixedHeader
+        self.variableHeader = variableHeader
+        self.payload = payload
+    }
+    
+    init(topic: String, payload: String?, qos: MQTTQos = .AT_MOST_ONCE, dup: Bool = false, retain: Bool = false, messageId: Int?) {
+        fixedHeader = MQTTPacketFixedHeader(MqttMessageType: .PUBLISH, isDup: dup, qosLevel: qos, isRetain: retain, remainingLength: 0)
+        
+        variableHeader = MQTTPublishVariableHeader(topicName: topic, packetId: messageId)
+        self.payload = payload?.data(using: .utf8)
+    }
+
 }
 
 struct MQTTOnlyFixedHeaderPacket {

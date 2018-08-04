@@ -14,19 +14,19 @@ struct MQTTPacketFixedHeader {
     let isRetain: Bool
     let remainingLength: Int
     
-    func firstByte() -> UInt8 {
-        var res: UInt8 = 0
-        res |= MqttMessageType.rawValue << 4
-        if isDup {
-            res |= 0x08
-        }
-        res |= qosLevel.rawValue << 1
-        
-        if isRetain {
-            res |= 0x01
-        }
-        return res
-    }
+//    func firstByte() -> UInt8 {
+//        var res: UInt8 = 0
+//        res |= MqttMessageType.rawValue << 4
+//        if isDup {
+//            res |= 0x08
+//        }
+//        res |= qosLevel.rawValue << 1
+//        
+//        if isRetain {
+//            res |= 0x01
+//        }
+//        return res
+//    }
 }
 
 enum MQTTControlPacketType: UInt8 {
