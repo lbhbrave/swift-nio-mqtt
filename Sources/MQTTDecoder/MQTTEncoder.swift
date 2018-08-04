@@ -8,11 +8,15 @@
 import Foundation
 import NIO
 
-final class MQTTEncoder: ChannelOutboundHandler{
-    typealias OutboundIn = MQTTPacket
-    typealias OutboundOut = ByteBuffer
-
-    func write(ctx: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
+public final class MQTTEncoder: ChannelOutboundHandler{
+    public typealias OutboundIn = MQTTPacket
+    public typealias OutboundOut = ByteBuffer
+    
+    public init () {
+        
+    }
+    
+    public func write(ctx: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
         let packet = self.unwrapOutboundIn(data)
         print(packet)
         do {
@@ -129,6 +133,130 @@ final class MQTTEncoder: ChannelOutboundHandler{
         ctx.writeAndFlush(self.wrapOutboundOut(buf), promise: nil)
     }
     
+    func writeSubscribePacket(p: MQTTSubscribePacket, ctx: ChannelHandlerContext) throws {
+        let fixedHeader = p.fixedHeader
+        let variableHeader = p.variableHeader
+        let payload = p.payload
+        
+        var payloadSize = 0
+        let variableHeaderSize = 2
+        
+        for sub in payload.subscriptions {
+            // encode string
+            payloadSize += 2 + sub.topicFilter.lengthOfBytes(using: .utf8)
+            // qos
+            payloadSize += 1
+        }
+        
+        let variablePartSize = variableHeaderSize + payloadSize
+        
+        let fixedHeaderSize = 1 + encodeVariablePartSize(size: variablePartSize)
+        
+        var buf = ctx.channel.allocator.buffer(capacity: fixedHeaderSize + variablePartSize)
+        
+        buf.write(byte: encodeFixedHeder(fixedHeader))
+        
+        writeVariableLength(buffer: &buf, length: variablePartSize)
+        
+        buf.write(short: variableHeader.messageId)
+        
+        for sub  in payload.subscriptions {
+            buf.encodeWrite(str: sub.topicFilter)
+            buf.write(byte: sub.requestedQoS.rawValue)
+        }
+        
+        ctx.write(wrapOutboundOut(buf), promise: nil)
+        
+    }
+    
+    func writeSubAckPacket(p: MQTTSubAckPacket, ctx: ChannelHandlerContext) throws {
+        
+        let fixedHeader = p.fixedHeader
+        let variableHeader = p.variableHeader
+        let payload = p.payload
+        
+        let variableHeaderSize = 2
+        let payloadSize = payload.grantedQoSLevels.count
+
+        
+        let variablePartSize = variableHeaderSize + payloadSize
+        
+        let fixedHeaderSize = 1 + encodeVariablePartSize(size: variablePartSize)
+        
+        var buf = ctx.channel.allocator.buffer(capacity: fixedHeaderSize + variablePartSize)
+        
+        buf.write(byte: encodeFixedHeder(fixedHeader))
+        
+        writeVariableLength(buffer: &buf, length: variablePartSize)
+        
+        buf.write(short: variableHeader.messageId)
+        
+        for qos in payload.grantedQoSLevels {
+            buf.write(byte: qos)
+        }
+        
+        ctx.write(wrapOutboundOut(buf), promise: nil)
+    }
+    
+    func writeUnsubscribePacket(p: MQTTUnSubscribekPacket, ctx: ChannelHandlerContext) throws {
+        let fixedHeader = p.fixedHeader
+        let variableHeader = p.variableHeader
+        let payload = p.payload
+        
+        var payloadSize = 0
+        let variableHeaderSize = 2
+        
+        for topic in payload.topicFilters {
+            // encode string
+            payloadSize += 2 + topic.lengthOfBytes(using: .utf8)
+        }
+        
+        let variablePartSize = variableHeaderSize + payloadSize
+        
+        let fixedHeaderSize = 1 + encodeVariablePartSize(size: variablePartSize)
+        
+        var buf = ctx.channel.allocator.buffer(capacity: fixedHeaderSize + variablePartSize)
+        
+        buf.write(byte: encodeFixedHeder(fixedHeader))
+        
+        writeVariableLength(buffer: &buf, length: variablePartSize)
+        
+        buf.write(short: variableHeader.messageId)
+        
+        for topic in payload.topicFilters {
+            buf.encodeWrite(str: topic)
+        }
+        
+        ctx.write(wrapOutboundOut(buf), promise: nil)
+        
+    }
+    
+    func writeOnlyMessageIdPacket(p: MQTTOnlyMessageIdPacket, ctx: ChannelHandlerContext) throws {
+        let fixedHeader = p.fixedHeader
+        let variableHeader = p.variableHeader
+        let variableHeaderSize = 2
+
+        let fixedHeaderSize = 1 + encodeVariablePartSize(size: variableHeaderSize)
+        
+        var buf = ctx.channel.allocator.buffer(capacity: fixedHeaderSize + variableHeaderSize)
+        
+        buf.write(byte: encodeFixedHeder(fixedHeader))
+        
+        writeVariableLength(buffer: &buf, length: variableHeaderSize)
+        
+        buf.write(short: variableHeader.messageId)
+        ctx.write(wrapOutboundOut(buf), promise: nil)
+
+    }
+    
+    func writePacketWithOnlyFixedheader(p: MQTTOnlyMessageIdPacket, ctx: ChannelHandlerContext) throws {
+        let fixedHeader = p.fixedHeader
+        var buf = ctx.channel.allocator.buffer(capacity: 2)
+        buf.write(byte: encodeFixedHeder(fixedHeader))
+        buf.write(byte: 0)
+        ctx.write(wrapOutboundOut(buf), promise: nil)
+    }
+
     func writeVariableLength(buffer: inout ByteBuffer, length: Int) {
         var num = length
         repeat {
@@ -154,7 +282,7 @@ final class MQTTEncoder: ChannelOutboundHandler{
     
     func encodeFixedHeder(_ fixedHeader: MQTTPacketFixedHeader) -> UInt8 {
         var res: UInt8 = 0
-        res |= fixedHeader.MqttMessageType.rawValue << 4
+        res |= fixedHeader.messageType.rawValue << 4
         if fixedHeader.isDup {
             res |= 0x08
         }

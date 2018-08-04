@@ -14,7 +14,7 @@ enum MQTTPacketPayload {
     case UNSUBSCRIBE(payload: MQTTUnsubscribePayload)
 }
 
-struct MQTTConnectPayload {
+public struct MQTTConnectPayload {
     let clientIdentifier: String
     let willTopic: String?
     let willMessage: Data?
@@ -27,20 +27,20 @@ struct MQTTConnectPayload {
 
 
 struct MQTTSubscribePayload {
-    let subscriptions: [MQTTTopicSubscriptions]
+    public let subscriptions: [MQTTTopicSubscriptions]
 }
 
 struct MQTTSubAckPayload {
-    let grantedQoSLevels: [MQTTQos]
+    let grantedQoSLevels: [UInt8]
 }
 
 struct MQTTUnsubscribePayload {
     let topicFilters: [String]
 }
 
-struct MQTTTopicSubscriptions {
-    let topicFilter: String
-    let requestedQoS: MQTTQos
+public struct MQTTTopicSubscriptions {
+    public let topicFilter: String
+    public let requestedQoS: MQTTQos
 }
 
 

@@ -11,12 +11,12 @@ class MQTTUtils {
     
     
     static internal func validateFixedHeader(_ header : MQTTPacketFixedHeader, firstByte: UInt8) throws {
-        switch header.MqttMessageType {
+        switch header.messageType {
         case .PUBREL, .SUBSCRIBE, .UNSUBSCRIBE:
             if header.qosLevel != .AT_LEAST_ONCE {
                 throw MQTTDecodeError.invalidQosLevel
             }
-            if header.MqttMessageType == .UNSUBSCRIBE {
+            if header.messageType == .UNSUBSCRIBE {
                 guard firstByte & UInt8(0x0F) == 0x02 else {
                     throw MQTTDecodeError.invalidFixedHeader(Str: "subscribe first byte invaliad")
                 }

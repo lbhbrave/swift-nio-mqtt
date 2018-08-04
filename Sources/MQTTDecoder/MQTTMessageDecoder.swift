@@ -43,7 +43,7 @@ internal struct DecodeConsts {
 
 struct MQTTMessageDecoder {
     func decodeVariableHeader(fixedHeader: MQTTPacketFixedHeader, buffer: inout ByteBuffer) throws -> decodeResult<MQTTPacketVariableHeader> {
-        switch fixedHeader.MqttMessageType {
+        switch fixedHeader.messageType {
         case .CONNEC:
             return try decodeConnectVariableHeader(fixedHeader: fixedHeader, buffer: &buffer)
         case .PUBLISH:
@@ -119,7 +119,7 @@ extension MQTTMessageDecoder {
             throw MQTTDecodeError.remainLengthExceed
         }
         
-        let fixedHeader = MQTTPacketFixedHeader(MqttMessageType: messageType, isDup: dup, qosLevel: MQTTQos(rawValue: qos)!, isRetain: retain, remainingLength: remainingLength)
+        let fixedHeader = MQTTPacketFixedHeader(messageType: messageType, isDup: dup, qosLevel: MQTTQos(rawValue: qos)!, isRetain: retain, remainingLength: remainingLength)
         
         try MQTTUtils.validateFixedHeader(fixedHeader, firstByte: firstByte)
         
@@ -281,7 +281,7 @@ extension MQTTMessageDecoder {
         let (decoded, messageId) = try decodeMessageId(buffer: &buffer)
         
         var variableHeader: MQTTPacketVariableHeader
-        switch fixedHeader.MqttMessageType {
+        switch fixedHeader.messageType {
         case .SUBSCRIBE:
             variableHeader = .SUBSCRIBE(variableHeader: MQTTMessageIdVariableHeader(messageId: messageId!))
         case .UNSUBSCRIBE:
@@ -385,13 +385,13 @@ extension MQTTMessageDecoder {
     
     func decodeSubAckPayloads(remainLength: Int, buffer: inout ByteBuffer) throws -> (decoded: Int, result: MQTTPacketPayload?) {
         var totalDecoded = 0
-        var grantedQoSLevels: [MQTTQos] = []
+        var grantedQoSLevels: [UInt8] = []
         while totalDecoded < remainLength {
             var qos: UInt8 = buffer.getInteger(at: buffer.readerIndex + totalDecoded)!
-            if qos != MQTTQos.FAILURE.rawValue {
+            if qos != 0x80 {
                 qos &= 0x03
             }
-            grantedQoSLevels.append(MQTTQos(rawValue: qos)!)
+            grantedQoSLevels.append(qos)
             totalDecoded += 1
         }
         return (totalDecoded, .SUBACK(payload: MQTTSubAckPayload(grantedQoSLevels: grantedQoSLevels)))

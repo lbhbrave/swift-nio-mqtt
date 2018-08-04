@@ -1,76 +1,95 @@
-//===----------------------------------------------------------------------===//
 //
-// This source file is part of the SwiftNIO open source project
+//  main.swift
+//  NIOMQTTServer
 //
-// Copyright (c) 2017-2018 Apple Inc. and the SwiftNIO project authors
-// Licensed under Apache License v2.0
+//  Created by yh on 2018/8/4.
 //
-// See LICENSE.txt for license information
-// See CONTRIBUTORS.txt for the list of SwiftNIO project authors
-//
-// SPDX-License-Identifier: Apache-2.0
-//
-//===----------------------------------------------------------------------===//
 import NIO
+import MQTTDecoder
+import Dispatch
 
-
-// We need to share the same ChatHandler for all as it keeps track of all
-// connected clients. For this ChatHandler MUST be thread-safe!
-
-final class MQTTHandler: ChannelInboundHandler {
+/// `Dispatch` executed the submitted block.
+final class MQTTServerHandler: ChannelInboundHandler {
+    
     public typealias InboundIn = MQTTPacket
-    typealias OutboundOut = MQTTPacket
-    var nums = 0
+    public typealias OutboundOut = MQTTPacket
+    
+    let maxGrantedQosLevel: UInt8 = 0
+    
+    struct subscribtion {
+        let channel: Channel
+        let qos: UInt8
+    }
+    
+    // All access to channels is guarded by channelsSyncQueue.
+    private let channelsSyncQueue = DispatchQueue(label: "channelsQueue")
+    
+    private var clients: [ObjectIdentifier: Channel] = [:]
+    private var subscribtions: [String: [Channel]] = [:]
+//
     public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
+        let id = ObjectIdentifier(ctx.channel)
         let packet = self.unwrapInboundIn(data)
-        nums += 1
-//        print(nums)
-
-        switch packet {
-        case let .CONNEC(_):
-            let connack = MQTTConnAckPacket(returnCode: MQTTConnectReturnCode(0x00))
-//            print("publish")
-//            let connect = MQTTConnecPacket(i)
-            ctx.writeAndFlush(self.wrapOutboundOut(.CONNACK(packet: connack)), promise: nil)
-        case let .PUBLISH(packet):
-            let topic = packet.topic
-            let payloads  = String(data: packet.payload!, encoding: .utf8)
-            print("get \(topic) payload: \(payloads ?? "nothing")")
-            let publisPacket = MQTTPublishPacket(topic: topic, payload: "hello world", qos: .AT_LEAST_ONCE, messageId: 423)
-            ctx.writeAndFlush(self.wrapOutboundOut(.PUBLISH(packet: publisPacket)), promise: nil)
-
-//        case .CONNACK(let packet):
-//            print("connack")
-//        case .PINGREQ(let packet):
-//            print("pingreq")
-//        case .PINGRESP(let packet):
-//            print("pingres")
-        case .SUBSCRIBE(let packet):
-            print(packet)
-//        case .UNSUBSCRIBE(let packet):
-//            print(packet)
-        case let .DISCONNECT(packet):
-            print("disconnect")
-        default:
-            print(nums)
-
-//            print("others")
+        clients[id] = ctx.channel
+        do {
+            switch packet {
+            case .CONNEC(let packet):
+                try handleConnection(packet: packet, ctx: ctx)
+                
+            case .SUBSCRIBE(let packet):
+                try handleSubScirbtion(packet: packet, ctx: ctx)
+            default:
+                print("other packets")
+            }
+            
+        } catch {
+            errorCaught(ctx: ctx, error: error)
         }
-        
     }
     
     public func errorCaught(ctx: ChannelHandlerContext, error: Error) {
         print("error: ", error)
+        
         // As we are not really interested getting notified on success or failure we just pass nil as promise to
         // reduce allocations.
         ctx.close(promise: nil)
     }
     
-    public func channelActive(ctx: ChannelHandlerContext) {
-//        let remoteAddress = ctx.remoteAddress!
+    func handleConnection(packet: MQTTConnecPacket, ctx: ChannelHandlerContext) throws {
+        guard let password = packet.password else {
+            return
+        }
+        let pwStr = String(data: password, encoding: .utf8)
+        guard packet.userName == "yanghuan", pwStr == "yhyhyh" else {
+            return
+        }
+        
+        let connack = MQTTConnAckPacket(isSessionPresent: false, returnCode: MQTTConnectReturnCode(0x00))
+        
+        ctx.write(self.wrapOutboundOut(.CONNACK(packet: connack)), promise: nil)
+        print("accept coonection")
+    }
+    
+    func handleSubScirbtion(packet: MQTTSubscribePacket, ctx: ChannelHandlerContext) throws {
+        var grantedQos: [UInt8] = []
+        for sub in packet.subscriptions {
+           if var channels = subscribtions[sub.topicFilter] {
+                channels.append(ctx.channel)
+            } else {
+                subscribtions[sub.topicFilter] = [ctx.channel]
+            }
+            grantedQos.append(min(sub.requestedQoS.rawValue, maxGrantedQosLevel))
+        }
+        let subAckPacket = MQTTSubAckPacket(messageId: packet.messageId, grantedQoSLevels: grantedQos)
+        
+        ctx.write(self.wrapOutboundOut(.SUBACK(packet: subAckPacket)), promise: nil)
+        print("current sub topic:\(subscribtions.keys)")
     }
 }
 
+// We need to share the same ChatHandler for all as it keeps track of all
+// connected clients. For this ChatHandler MUST be thread-safe!
+let server = MQTTServerHandler()
 
 let group = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 let bootstrap = ServerBootstrap(group: group)
@@ -80,14 +99,11 @@ let bootstrap = ServerBootstrap(group: group)
     
     // Set the handlers that are applied to the accepted Channels
     .childChannelInitializer { channel in
-        // Add handler that will buffer data until a \n is received
-        channel.pipeline.add(handler: MQTTEncoder()).then{
-            channel.pipeline.add(handler: MQTTDecoder()).then{
-                channel.pipeline.add(handler: MQTTHandler())
-            }
+        channel.pipeline.addHandlers([MQTTDecoder(), MQTTEncoder()], first: true).then { v in
+            channel.pipeline.add(handler: server)
         }
- 
     }
+    
     // Enable TCP_NODELAY and SO_REUSEADDR for the accepted Channels
     .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
     .childChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
@@ -102,7 +118,7 @@ let arguments = CommandLine.arguments
 let arg1 = arguments.dropFirst().first
 let arg2 = arguments.dropFirst(2).first
 
-let defaultHost = "0.0.0.0"
+let defaultHost = "::"
 let defaultPort = 9999
 
 enum BindTo {

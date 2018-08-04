@@ -8,8 +8,15 @@ let package = Package(
     products: [
         // Products define the executables and libraries produced by a package, and make them visible to other packages.
         .executable(
+            name: "NIOMQTTServer",
+            targets: ["NIOMQTTServer"]),
+        .executable(
+            name: "NIOMQTTClient",
+            targets: ["NIOMQTTClient"]),
+        .library(
             name: "MQTTDecoder",
             targets: ["MQTTDecoder"]),
+
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", from: "1.8.0"),
@@ -23,6 +30,14 @@ let package = Package(
         .target(
             name: "MQTTDecoder",
             dependencies: ["NIO"]),
+        .target(
+            name: "NIOMQTTServer",
+            dependencies: ["NIO", "MQTTDecoder"],
+            path: "NIOMQTTServer"),
+        .target(
+            name: "NIOMQTTClient",
+            dependencies: ["NIO", "MQTTDecoder"],
+            path: "NIOMQTTClient"),
         .testTarget(
             name: "MQTTDecoderTests",
             dependencies: ["MQTTDecoder"]),

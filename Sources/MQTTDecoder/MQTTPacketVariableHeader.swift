@@ -45,5 +45,5 @@ struct MQTTConnAckVariableHeader {
 }
 
 struct MQTTMessageIdVariableHeader {
-    let messageId: Int
+    public let messageId: Int
 }
