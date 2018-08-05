@@ -171,7 +171,6 @@ public final class MQTTDecoder: ByteToMessageDecoder {
     private var shouldKeepingParse = false
     fileprivate var parser: MQTTParserState = MQTTParserState()
     public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
-        print("channel read")
         var buffer = self.unwrapInboundIn(data)
 
         guard !self.decoding else {

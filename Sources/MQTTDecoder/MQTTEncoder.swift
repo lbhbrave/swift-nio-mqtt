@@ -18,7 +18,7 @@ public final class MQTTEncoder: ChannelOutboundHandler{
     
     public func write(ctx: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
         let packet = self.unwrapOutboundIn(data)
-        print(packet)
+//        print(packet)
         do {
             try _write(ctx: ctx, packet: packet)
         } catch {
@@ -29,14 +29,35 @@ public final class MQTTEncoder: ChannelOutboundHandler{
 
     func _write(ctx: ChannelHandlerContext, packet: MQTTPacket) throws {
         switch packet {
-        case let .CONNEC(packet):
+        case .CONNEC(let packet):
             try writeConnectPacket(p: packet, ctx: ctx)
-        case let .CONNACK(packet):
+        case .CONNACK(let packet):
             try writeConnAckPacket(p: packet, ctx: ctx)
-        case let .PUBLISH(packet):
+        case .PUBLISH(let packet):
             try writePublishPacket(p: packet, ctx: ctx)
-        default:
-            return
+        case .PINGREQ(let packet):
+            try writePacketWithOnlyFixedheader(p: packet, ctx: ctx)
+        case .PINGRESP(let packet):
+            try writePacketWithOnlyFixedheader(p: packet, ctx: ctx)
+        case .PUBACK(let packet):
+            try writeOnlyMessageIdPacket(p: packet, ctx: ctx)
+        case .PUBREC(let packet):
+            try writeOnlyMessageIdPacket(p: packet, ctx: ctx)
+        case .PUBREL(let packet):
+            try writeOnlyMessageIdPacket(p: packet, ctx: ctx)
+        case .PUBCOMP(let packet):
+            try writeOnlyMessageIdPacket(p: packet, ctx: ctx)
+        case .SUBSCRIBE(let packet):
+            try writeSubscribePacket(p: packet, ctx: ctx)
+        case .SUBACK(let packet):
+            try writeSubAckPacket(p: packet, ctx: ctx)
+        case .UNSUBSCRIBE(let packet):
+            try writeUnsubscribePacket(p: packet, ctx: ctx)
+        case .UNSUBACK(let packet):
+            try writeUnsubAckPacket(p: packet, ctx: ctx)
+        case .DISCONNECT(let packet):
+            try writePacketWithOnlyFixedheader(p: packet, ctx: ctx)
+
         }
     }
     func writeConnAckPacket(p: MQTTConnAckPacket, ctx: ChannelHandlerContext) throws {
@@ -248,8 +269,12 @@ public final class MQTTEncoder: ChannelOutboundHandler{
         ctx.write(wrapOutboundOut(buf), promise: nil)
 
     }
+    func writeUnsubAckPacket(p: MQTTUnsubackPacket, ctx: ChannelHandlerContext) throws {
+        let onlyMessageIdpacket = MQTTOnlyMessageIdPacket(fixedHeader: p.fixedHeader, variableHeader: p.variableHeader)
+        try writeOnlyMessageIdPacket(p: onlyMessageIdpacket, ctx: ctx)
+    }
     
-    func writePacketWithOnlyFixedheader(p: MQTTOnlyMessageIdPacket, ctx: ChannelHandlerContext) throws {
+    func writePacketWithOnlyFixedheader(p: MQTTOnlyFixedHeaderPacket, ctx: ChannelHandlerContext) throws {
         let fixedHeader = p.fixedHeader
         var buf = ctx.channel.allocator.buffer(capacity: 2)
         buf.write(byte: encodeFixedHeder(fixedHeader))

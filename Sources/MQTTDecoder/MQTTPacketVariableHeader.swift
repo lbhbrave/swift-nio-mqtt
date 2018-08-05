@@ -34,7 +34,7 @@ struct MQTTConnectVariableHeader {
     let keepAliveTimeSeconds: UInt16
 }
 
-struct MQTTPublishVariableHeader {
+public struct MQTTPublishVariableHeader {
     let topicName: String
     let packetId: Int?
 }

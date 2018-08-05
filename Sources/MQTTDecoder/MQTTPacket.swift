@@ -182,10 +182,14 @@ public struct MQTTConnecPacket {
 public struct MQTTPublishPacket {
     let fixedHeader: MQTTPacketFixedHeader
     let variableHeader: MQTTPublishVariableHeader
-    let payload: Data?
+    public let payload: Data?
     
-    var topic: String {
+    public var topic: String {
         return variableHeader.topicName
+    }
+    
+    public var messageId: Int? {
+        return variableHeader.packetId
     }
     
     init(fixedHeader: MQTTPacketFixedHeader, variableHeader: MQTTPublishVariableHeader, payload: Data?) {
@@ -194,17 +198,29 @@ public struct MQTTPublishPacket {
         self.payload = payload
     }
     
-    init(topic: String, payload: String?, qos: MQTTQos = .AT_MOST_ONCE, dup: Bool = false, retain: Bool = false, messageId: Int?) {
+    public init(topic: String, payload: Data?, qos: MQTTQos = .AT_MOST_ONCE, dup: Bool = false, retain: Bool = false, messageId: Int?) {
         fixedHeader = MQTTPacketFixedHeader(messageType: .PUBLISH, isDup: dup, qosLevel: qos, isRetain: retain, remainingLength: 0)
         
         variableHeader = MQTTPublishVariableHeader(topicName: topic, packetId: messageId)
-        self.payload = payload?.data(using: .utf8)
+        self.payload = payload
     }
 
 }
 
 public struct MQTTOnlyFixedHeaderPacket {
     let fixedHeader: MQTTPacketFixedHeader
+    public init?(type: MQTTControlPacketType) {
+        switch type {
+        case .PINGREQ, .PINGRESP, .DISCONNECT:
+            fixedHeader = MQTTPacketFixedHeader(messageType: type)
+        default:
+            return nil
+        }
+    }
+
+    init(fixedHeader: MQTTPacketFixedHeader) {
+        self.fixedHeader = fixedHeader
+    }
 }
 
 public struct MQTTOnlyMessageIdPacket {
@@ -216,7 +232,7 @@ public struct MQTTOnlyMessageIdPacket {
         self.variableHeader = variableHeader
     }
 
-    init?(type: MQTTControlPacketType, messageId: Int) {
+    public init?(type: MQTTControlPacketType, messageId: Int) {
         switch type {
         case .PUBACK, .PUBREC, .PUBREL, .PUBCOMP:
             self.fixedHeader = MQTTPacketFixedHeader(messageType: type, isDup: false, qosLevel: .AT_LEAST_ONCE, isRetain: false, remainingLength: 2)
@@ -270,6 +286,9 @@ public struct MQTTUnSubscribekPacket {
     let fixedHeader: MQTTPacketFixedHeader
     let variableHeader: MQTTMessageIdVariableHeader
     let payload: MQTTUnsubscribePayload
+    public var topicFilters: [String] {
+        return payload.topicFilters
+    }
 }
 
 public struct MQTTConnAckPacket {

@@ -18,32 +18,44 @@ final class MQTTServerHandler: ChannelInboundHandler {
     
     struct subscribtion {
         let channel: Channel
-        let qos: UInt8
+        let qos: MQTTQos
     }
     
     // All access to channels is guarded by channelsSyncQueue.
     private let channelsSyncQueue = DispatchQueue(label: "channelsQueue")
     
     private var clients: [ObjectIdentifier: Channel] = [:]
-    private var subscribtions: [String: [Channel]] = [:]
+    private var subscribtions: [String: [subscribtion]] = [:]
+    
+    private var pubNums = 0
 //
     public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
-        let id = ObjectIdentifier(ctx.channel)
         let packet = self.unwrapInboundIn(data)
-        clients[id] = ctx.channel
         do {
             switch packet {
             case .CONNEC(let packet):
-                try handleConnection(packet: packet, ctx: ctx)
-                
+                try self.handleConnection(packet: packet, ctx: ctx)
             case .SUBSCRIBE(let packet):
-                try handleSubScirbtion(packet: packet, ctx: ctx)
+                try self.handleSub(packet: packet, ctx: ctx)
+            case .PUBLISH(let packet):
+                try self.handlePublish(packet: packet, ctx: ctx)
+            case .PINGREQ(let packet):
+                try self.handlePinreq(packet: packet, ctx: ctx)
+            case .UNSUBSCRIBE(let packet):
+                try self.handleUnsub(packet: packet, ctx: ctx)
             default:
                 print("other packets")
             }
             
         } catch {
-            errorCaught(ctx: ctx, error: error)
+            self.errorCaught(ctx: ctx, error: error)
+        }
+    }
+    
+    public func channelActive(ctx: ChannelHandlerContext) {
+        let channel = ctx.channel
+        self.channelsSyncQueue.async {
+            self.clients[ObjectIdentifier(channel)] = channel
         }
     }
     
@@ -70,20 +82,64 @@ final class MQTTServerHandler: ChannelInboundHandler {
         print("accept coonection")
     }
     
-    func handleSubScirbtion(packet: MQTTSubscribePacket, ctx: ChannelHandlerContext) throws {
+    func handleSub(packet: MQTTSubscribePacket, ctx: ChannelHandlerContext) throws {
         var grantedQos: [UInt8] = []
         for sub in packet.subscriptions {
-           if var channels = subscribtions[sub.topicFilter] {
-                channels.append(ctx.channel)
-            } else {
-                subscribtions[sub.topicFilter] = [ctx.channel]
+            let subInfo = subscribtion(channel: ctx.channel, qos: sub.requestedQoS)
+            channelsSyncQueue.async {
+                var channels: [subscribtion] = self.subscribtions[sub.topicFilter] ?? []
+                channels.append(subInfo)
+                self.subscribtions[sub.topicFilter] = channels
             }
+            
             grantedQos.append(min(sub.requestedQoS.rawValue, maxGrantedQosLevel))
         }
         let subAckPacket = MQTTSubAckPacket(messageId: packet.messageId, grantedQoSLevels: grantedQos)
         
         ctx.write(self.wrapOutboundOut(.SUBACK(packet: subAckPacket)), promise: nil)
-        print("current sub topic:\(subscribtions.keys)")
+        for (topic, subs) in subscribtions {
+            print("topic: \(topic), count: \(subs.count)")
+        }
+        
+    }
+    
+    func handlePublish(packet: MQTTPublishPacket, ctx: ChannelHandlerContext) throws {
+        let topic = packet.topic
+        guard let subs = subscribtions[topic] else {
+            return
+        }
+        for sub in subs {
+            let messageId = packet.messageId
+            if sub.qos != .AT_MOST_ONCE && messageId == nil {
+                continue
+            }
+            let pubPacket = MQTTPublishPacket(topic: topic, payload: packet.payload, messageId: messageId)
+            if sub.qos == .AT_LEAST_ONCE {
+                let pubAckPacket = MQTTOnlyMessageIdPacket(type: .PUBACK, messageId: messageId!)
+                ctx.writeAndFlush(wrapOutboundOut(.PUBACK(packet: pubAckPacket!)), promise: nil)
+            }
+            if sub.qos == .EXACTLY_ONCE {
+                let pubAckPacket = MQTTOnlyMessageIdPacket(type: .PUBREC, messageId: messageId!)
+                ctx.writeAndFlush(wrapOutboundOut(.PUBREC(packet: pubAckPacket!)), promise: nil)
+            }
+            sub.channel.write(wrapOutboundOut(.PUBLISH(packet: pubPacket)), promise: nil)
+        }
+        channelsSyncQueue.async {
+            self.pubNums += 1
+            print("get pub packet:\(topic), num:\(self.pubNums)")
+        }
+    }
+    
+    func handlePinreq(packet: MQTTOnlyFixedHeaderPacket, ctx: ChannelHandlerContext) throws {
+        let pingresp = MQTTOnlyFixedHeaderPacket(type: .PINGRESP)
+        ctx.writeAndFlush(wrapOutboundOut(.PINGRESP(packet: pingresp!)), promise: nil)
+        print("ping pong")
+    }
+    
+    func handleUnsub(packet: MQTTUnSubscribekPacket, ctx: ChannelHandlerContext) throws {
+//        let pingresp = MQTTOnlyFixedHeaderPacket(type: .PINGRESP)
+//        ctx.write(wrapOutboundOut(.PINGRESP(packet: pingresp!)), promise: nil)
+//        print("ping pong")
     }
 }
 

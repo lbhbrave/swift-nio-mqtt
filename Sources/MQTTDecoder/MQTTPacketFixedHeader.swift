@@ -37,7 +37,7 @@ struct MQTTPacketFixedHeader {
 //    }
 }
 
-enum MQTTControlPacketType: UInt8 {
+public enum MQTTControlPacketType: UInt8 {
     case CONNEC = 1
     case CONNACK
     case PUBLISH

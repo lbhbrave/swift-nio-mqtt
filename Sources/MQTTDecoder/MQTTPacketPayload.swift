@@ -34,7 +34,7 @@ struct MQTTSubAckPayload {
     let grantedQoSLevels: [UInt8]
 }
 
-struct MQTTUnsubscribePayload {
+public struct MQTTUnsubscribePayload {
     let topicFilters: [String]
 }
 
