@@ -9,7 +9,6 @@ import Foundation
 class MQTTUtils {
     typealias MQTTVersion = (name: String, level: UInt8)
     
-    
     static internal func validateFixedHeader(_ header : MQTTPacketFixedHeader, firstByte: UInt8) throws {
         switch header.messageType {
         case .PUBREL, .SUBSCRIBE, .UNSUBSCRIBE:
@@ -25,7 +24,7 @@ class MQTTUtils {
             return
         }
     }
-   
+//
 //    static internal func validateConnecPwordAndUnameFlag(pwordFlag: Bool, unameFlag: Bool) throws {
 //        if !unameFlag && pwordFlag {
 //            throw MQTTDecodeError.invalidVariableHeader(str: "password flag should be 0 when username flag is 0")

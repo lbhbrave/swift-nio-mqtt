@@ -7,9 +7,34 @@
 import NIO
 import MQTTDecoder
 import Dispatch
+import Foundation
 
 /// `Dispatch` executed the submitted block.
-final class MQTTServerHandler: ChannelInboundHandler {
+
+protocol NIOMQTTClientMessageHandle {
+    func didReceive(Client: NIOMQTTClient ,message: MQTTPacket)
+}
+
+protocol NIOMQTTClientDelegate {
+    func errorCaught(client: NIOMQTTClient, error: Error)
+    func connected(client: NIOMQTTClient)
+    func disConnected(client: NIOMQTTClient)
+}
+
+enum NIOMQTTClientError: Error {
+    case connectInvalidParam(reason: String)
+}
+
+final class NIOMQTTClient {
+    var keepalive: Int = 60
+    func connect(userName: String?, password: Data?, host: String, port: Int) throws {
+        if userName != nil && password == nil {
+            throw NIOMQTTClientError.connectInvalidParam(reason: "need username")
+        }
+        let conPacket = MQTTConnecPacket()
+    }
+}
+final class NIOMQTTClientHandler: ChannelInboundHandler {
     
     public typealias InboundIn = MQTTPacket
     public typealias OutboundOut = MQTTPacket
@@ -131,7 +156,7 @@ final class MQTTServerHandler: ChannelInboundHandler {
 
 // We need to share the same ChatHandler for all as it keeps track of all
 // connected clients. For this ChatHandler MUST be thread-safe!
-let server = MQTTServerHandler()
+let server = NIOMQTTClientHandler()
 
 let group = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 let bootstrap = ServerBootstrap(group: group)

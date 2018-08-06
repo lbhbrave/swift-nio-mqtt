@@ -22,7 +22,6 @@ enum MQTTPacketVariableHeader {
 }
 
 struct MQTTConnectVariableHeader {
-    //    typealias T = MQTTConnectVariableHeader
     let name: String
     let version: UInt8
     let hasUserName: Bool
