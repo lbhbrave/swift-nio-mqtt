@@ -3,10 +3,10 @@
 This is a mqtt codec for swift-nio
 including decode encode
 
-A simple mqtt server and client for chat using mqtt-codec and swift-nio
+And a simple MQTT server and client using mqtt-codec and swift-nio
 
 ## TODO
-[] fully tested
-[] packet support copy on write
-[] simple mqtt server support all protocol
-[] A easy use mqttclient
+- [] Fully tested   
+- [] Packet support copy on write   
+- [] Simple MQTT server fully support MQTT protocol    
+- [] A easy use MQTTClient    
